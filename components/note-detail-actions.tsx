@@ -43,6 +43,7 @@ export default function NoteDetailActions({ noteId }: { noteId: string }) {
             router.push("/");
             router.refresh();
 
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             setIsDeleting(false); // 失败了要停止转圈
             toast.error("删除失败", {

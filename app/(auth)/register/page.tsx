@@ -66,6 +66,7 @@ export default function RegisterPage() {
                     router.push("/login");
                 }, 1500);
             }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             toast.error("系统错误", { description: "请稍后重试" });
         }

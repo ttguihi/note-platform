@@ -37,6 +37,7 @@ export async function verifySession() {
             algorithms: ["HS256"],
         });
         return payload as { userId: string };
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
         return null;
     }
