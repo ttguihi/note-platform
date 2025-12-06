@@ -1,0 +1,45 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  notes     Note[]
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  // 👇 新增字段：分类 (可选)
+  category  String?  
+  
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // 👇 新增关系：标签 (多对多)
+  tags      Tag[]    
+}
+
+// 👇 新增模型：标签
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  notes Note[]
+}
