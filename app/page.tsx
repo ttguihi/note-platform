@@ -3,19 +3,19 @@ import { prisma } from "@/lib/prisma";
 import NoteCard from "@/components/note-card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Plus, LogOut, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { verifySession } from "@/lib/session";
-import { logout } from "@/app/auth-actions";
 import Sidebar from "@/components/sidebar";
 import SearchBar from "@/components/search-bar";
-import PaginationControl from "@/components/pagination-control"; // 👈 引入分页组件
-
+import PaginationControl from "@/components/pagination-control";
+import LogoutButton from "@/components/logout-button"; // 👈 引入新组件
+import { ModeToggle } from "@/components/mode-toggle";
 interface HomeProps {
   searchParams: Promise<{
     category?: string;
     tag?: string;
     query?: string;
-    page?: string; // 👈 新增 page 参数
+    page?: string;
   }>;
 }
 
@@ -40,7 +40,7 @@ export default async function Home(props: HomeProps) {
   if (searchParams.query) {
     const q = searchParams.query;
     whereCondition.OR = [
-      { title: { contains: q } },
+      { title: { contains: q } }, // 注意：如果是 Postgres 建议加 mode: 'insensitive'
       { content: { contains: q } },
     ];
   }
@@ -52,10 +52,10 @@ export default async function Home(props: HomeProps) {
       where: whereCondition,
       orderBy: { createdAt: "desc" },
       include: { tags: true },
-      skip: skip, // 跳过前几页
-      take: pageSize, // 只取当前页数量
+      skip: skip,
+      take: pageSize,
     }),
-    // 2. 查询符合条件的总条数 (用于计算页码)
+    // 2. 查询符合条件的总条数
     prisma.note.count({
       where: whereCondition,
     }),
@@ -65,7 +65,7 @@ export default async function Home(props: HomeProps) {
 
   return (
     <main className="max-w-6xl mx-auto p-6 min-h-screen flex flex-col">
-      {/* Header (保持不变) */}
+      {/* Header */}
       <header className="flex justify-between items-center pb-6 border-b mb-6 shrink-0">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">我的知识库</h1>
@@ -73,10 +73,15 @@ export default async function Home(props: HomeProps) {
         </div>
         <div className="flex gap-3 items-center">
           <SearchBar />
-          <form action={logout}>
-            <Button variant="ghost" size="sm" className="text-gray-500"><LogOut size={16} className="mr-2" /> 退出</Button>
-          </form>
-          <Link href="/notes/create"><Button className="gap-2 shadow-sm"><Plus size={18} /> 新建笔记</Button></Link>
+          <ModeToggle />
+          {/* 👇 使用新的退出按钮组件 */}
+          <LogoutButton />
+
+          <Link href="/notes/create">
+            <Button className="gap-2 shadow-sm">
+              <Plus size={18} /> 新建笔记
+            </Button>
+          </Link>
         </div>
       </header>
 
@@ -84,7 +89,7 @@ export default async function Home(props: HomeProps) {
         <Sidebar />
 
         <section className="flex-1 flex flex-col">
-          {/* 筛选状态 (保持不变) */}
+          {/* 筛选状态 */}
           {isFiltering && (
             <div className="flex items-center gap-2 mb-4 bg-blue-50 text-blue-700 px-3 py-2 rounded-md text-sm border border-blue-100">
               <span className="font-semibold">当前筛选:</span>
@@ -113,7 +118,7 @@ export default async function Home(props: HomeProps) {
             )}
           </div>
 
-          {/* 👇 新增：分页控制器 (放在底部) */}
+          {/* 分页控制器 */}
           <div className="mt-auto">
             <PaginationControl totalCount={totalCount} pageSize={pageSize} />
           </div>
