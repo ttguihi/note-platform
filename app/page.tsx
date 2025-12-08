@@ -40,8 +40,18 @@ export default async function Home(props: HomeProps) {
   if (searchParams.query) {
     const q = searchParams.query;
     whereCondition.OR = [
-      { title: { contains: q } }, // 注意：如果是 Postgres 建议加 mode: 'insensitive'
-      { content: { contains: q } },
+      {
+        title: {
+          contains: q,
+          mode: 'insensitive' // 👈 Postgres 必须加这行，实现忽略大小写
+        }
+      },
+      {
+        content: {
+          contains: q,
+          mode: 'insensitive' // 👈 这里也要加
+        }
+      },
     ];
   }
 
