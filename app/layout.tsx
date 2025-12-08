@@ -4,7 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider"; // 👈 1. 引入
-
+import NextTopLoader from 'nextjs-toploader';
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -28,6 +28,7 @@ export default function RootLayout({
           enableSystem={false} // 👈 建议改为 false，强制由用户控制，而不是跟随系统
           disableTransitionOnChange={false}
         >
+          <NextTopLoader color="#6366f1" showSpinner={false} />
           {children}
           <Toaster position="top-center" richColors />
         </ThemeProvider>
