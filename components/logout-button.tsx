@@ -30,7 +30,7 @@ export default function LogoutButton() {
     return (
         <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="sm" className="text-gray-500 hover:text-slate-900">
+                <Button variant="ghost" size="sm" className="text-gray-700 hover:text-slate-900">
                     <LogOut size={16} className="mr-2" />
                     退出
                 </Button>
@@ -52,7 +52,7 @@ export default function LogoutButton() {
                             handleLogout();
                         }}
                         disabled={isLoggingOut}
-                        className="bg-slate-900 hover:bg-slate-800"
+                        className="bg-slate-500 hover:bg-slate-800"
                     >
                         {isLoggingOut ? (
                             <>

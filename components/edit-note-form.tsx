@@ -43,34 +43,89 @@ interface EditNoteFormProps {
     existingCategories: string[];
 }
 
+// --- LocalStorage 工具函数 ---
+
+const getDraftKey = (noteId: string) => `note-draft-${noteId}`;
+
+const saveLocalDraft = (noteId: string, data: z.infer<typeof formSchema>) => {
+    try {
+        // 使用 window 对象前，确保在客户端环境 (虽然 use client 已经保证了，但习惯上避免直接在顶层执行)
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(getDraftKey(noteId), JSON.stringify(data));
+            localStorage.setItem(`${getDraftKey(noteId)}-timestamp`, new Date().toISOString());
+        }
+    } catch (e) {
+        console.error("无法写入 LocalStorage", e);
+    }
+};
+
+const getLocalDraft = (noteId: string): z.infer<typeof formSchema> | null => {
+    try {
+        if (typeof window === 'undefined') return null; // 服务器端不读取 localStorage
+        const draft = localStorage.getItem(getDraftKey(noteId));
+        return draft ? formSchema.parse(JSON.parse(draft)) : null;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+        return null;
+    }
+};
+
+const clearLocalDraft = (noteId: string) => {
+    try {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(getDraftKey(noteId));
+            localStorage.removeItem(`${getDraftKey(noteId)}-timestamp`);
+        }
+    } catch (e) {
+        console.error("无法清除 LocalStorage", e);
+    }
+};
+
+// --- 组件开始 ---
+
 export default function EditNoteForm({ note, existingCategories }: EditNoteFormProps) {
     const router = useRouter();
 
     // 状态管理
     const [isSuccess, setIsSuccess] = useState(false);
+    const initialDraft = getLocalDraft(note.id);
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
-    const [lastSavedTime, setLastSavedTime] = useState<Date>(new Date());
 
-    // 初始化表单
+    // FIX 1: Hydration 修复: lastSavedTime 初始值设为 null，避免在 SSR 时调用 new Date()
+    const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+    // FIX 2: Hydration 修复: 增加 mounted 状态
+    const [isMounted, setIsMounted] = useState(false);
+
+    // 初始化表单，优先使用本地草稿
     const formMethods = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            title: note.title,
-            category: note.category || "",
-            tags: note.tags.map(t => t.name),
-            content: note.content,
+            title: initialDraft?.title ?? note.title,
+            category: initialDraft?.category ?? note.category ?? "",
+            tags: initialDraft?.tags ?? note.tags.map(t => t.name),
+            content: initialDraft?.content ?? note.content,
         },
     });
 
-    const { watch, control, handleSubmit, formState } = formMethods;
+    const { watch, control, handleSubmit, formState } = formMethods; // 修正解构方式
     const { isSubmitting } = formState;
 
-    // --- 逻辑函数区域 (定义在 useEffect 之前) ---
+    // FIX 3: Hydration 修复: 在客户端设置初始时间和 mounted 状态
+    useEffect(() => {
+        // 客户端加载后，设置 mounted 状态
+        setIsMounted(true);
+        // 设置初始的“已保存时间”
+        setLastSavedTime(new Date());
+    }, []);
+
+    // --- 逻辑函数区域 ---
 
     // 1. 自动保存逻辑 (防抖)
     const debouncedAutoSave = useDebouncedCallback(async (values: z.infer<typeof formSchema>) => {
-        // 如果正在手动提交或已成功，不执行自动保存
         if (isSubmitting || isSuccess) return;
+
+        // 步骤 1: 立即保存到 LocalStorage 作为本地草稿 (离线保障)
+        saveLocalDraft(note.id, values);
 
         setSaveStatus("saving");
         const formData = new FormData();
@@ -81,17 +136,22 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         formData.append("tags", values.tags.join(","));
 
         try {
+            // 尝试同步到服务器
             const result = await updateNote(formData);
             if (result?.success) {
                 setSaveStatus("saved");
-                setLastSavedTime(new Date());
+                setLastSavedTime(new Date()); // 成功同步后更新时间
+                // 步骤 2: 服务器保存成功后，清除本地草稿
+                clearLocalDraft(note.id);
                 router.refresh();
             } else {
                 setSaveStatus("error");
             }
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
+            // 步骤 3: 网络错误/离线状态
             setSaveStatus("error");
+            console.warn("自动保存到服务器失败，数据已保存到本地草稿。");
         }
     }, 1000);
 
@@ -99,7 +159,6 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
     const onManualSubmit = useCallback(async (values: z.infer<typeof formSchema>) => {
         if (isSuccess) return;
 
-        // 取消可能正在进行的自动保存
         debouncedAutoSave.cancel();
 
         const formData = new FormData();
@@ -114,6 +173,8 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
             if (result?.success) {
                 setIsSuccess(true);
+                // 步骤 4: 手动提交成功，清除本地草稿
+                clearLocalDraft(note.id);
                 toast.success("笔记已更新！", {
                     description: "正在返回详情页...",
                     duration: 1500,
@@ -124,7 +185,6 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                     router.refresh();
                 }, 1000);
 
-                // 人为挂起 Promise，保持按钮禁用状态直到页面跳转
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -135,7 +195,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
     // --- 监听区域 ---
 
-    // 👂 监听 Ctrl+S
+    // 👂 监听 Ctrl+S (手动同步)
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
             if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
@@ -147,9 +207,26 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         return () => document.removeEventListener("keydown", down);
     }, [handleSubmit, onManualSubmit]);
 
-    // 👂 监听表单变化 (React Compiler 会在这里报黄字警告，直接忽略即可)
+    // 👂 监听本地草稿恢复提示
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/incompatible-library
+        if (initialDraft) {
+            // 确保在客户端执行
+            if (typeof window !== 'undefined') {
+                const timestamp = localStorage.getItem(`${getDraftKey(note.id)}-timestamp`);
+                const timeString = timestamp ? new Date(timestamp).toLocaleTimeString() : '上次编辑时';
+
+                toast.warning("已自动恢复本地草稿！", {
+                    description: `上次本地保存时间：${timeString}。`,
+                    duration: 5000,
+                });
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // 👂 监听表单变化 (自动保存到本地和尝试同步到云端)
+    useEffect(() => {
+
         const subscription = watch((value) => {
             if (value) {
                 debouncedAutoSave(value as z.infer<typeof formSchema>);
@@ -169,19 +246,30 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                     {saveStatus === "saving" && (
                         <>
                             <Loader2 className="h-3 w-3 animate-spin" />
-                            <span>自动保存中...</span>
+                            <span>自动保存中... (本地)</span>
                         </>
                     )}
                     {saveStatus === "saved" && (
                         <>
                             <Cloud className="h-3 w-3" />
-                            <span>已保存 {lastSavedTime.toLocaleTimeString()}</span>
+                            {/* FIX 4: 仅在客户端且时间存在时，渲染动态时间字符串 */}
+                            {isMounted && lastSavedTime ? (
+                                <span>云端已同步 {lastSavedTime.toLocaleTimeString()}</span>
+                            ) : (
+                                // 服务器端和未同步完成时渲染静态文本
+                                <span>云端已同步</span>
+                            )}
                         </>
                     )}
                     {saveStatus === "error" && (
-                        <span className="text-red-500">自动保存失败</span>
+                        <span className="text-red-500 flex items-center">
+                            <Cloud className="h-3 w-3 mr-1" />
+                            自动同步失败，**数据已保存在本地**
+                        </span>
                     )}
                 </div>
+
+                {/* ... (表单字段保持不变) ... */}
 
                 <FormField
                     control={control}

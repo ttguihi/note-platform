@@ -65,7 +65,7 @@ export default async function NoteDetailPage(props: PageProps) {
                     ))}
                 </div>
 
-                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 leading-tight">
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-600 leading-tight">
                     {note.title}
                 </h1>
 

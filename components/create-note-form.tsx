@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import CategoryInput from "@/components/category-input";
 import TagInput from "@/components/tag-input";
 import { Input } from "@/components/ui/input";
+import { useDebouncedCallback } from "use-debounce";
 import {
     Form,
     FormControl,
@@ -35,27 +36,71 @@ interface CreateNoteFormProps {
     existingCategories: string[];
 }
 
+// --- LocalStorage 工具函数 (增强了类型检查) ---
+
+const CREATE_DRAFT_KEY = "create-note-draft";
+
+const saveLocalDraft = (data: z.infer<typeof formSchema>) => {
+    try {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(CREATE_DRAFT_KEY, JSON.stringify(data));
+        }
+    } catch (e) {
+        console.error("无法写入 LocalStorage", e);
+    }
+};
+
+const getLocalDraft = (): z.infer<typeof formSchema> | null => {
+    try {
+        if (typeof window === 'undefined') return null;
+        const draft = localStorage.getItem(CREATE_DRAFT_KEY);
+        return draft ? formSchema.parse(JSON.parse(draft)) : null;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+        return null;
+    }
+};
+
+const clearLocalDraft = () => {
+    try {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem(CREATE_DRAFT_KEY);
+        }
+    } catch (e) {
+        console.error("无法清除 LocalStorage", e);
+    }
+};
+
+// --- 组件开始 ---
+
 export default function CreateNoteForm({ existingCategories }: CreateNoteFormProps) {
     const router = useRouter();
 
-    // UI 状态
     const [isSuccess, setIsSuccess] = useState(false);
+    const initialDraft = getLocalDraft();
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            title: "",
-            category: "",
-            tags: [],
-            content: "",
+            title: initialDraft?.title || "",
+            category: initialDraft?.category || "",
+            tags: initialDraft?.tags || [],
+            content: initialDraft?.content || "",
         },
     });
 
+    // 修正解构方式：watch 直接从 form 对象解构
+    const { control, handleSubmit, watch } = form;
     const { isSubmitting } = form.formState;
 
-    // 👇 使用 useCallback 包裹提交逻辑，解决 useEffect 依赖警告
+    const debouncedLocalSave = useDebouncedCallback((values: z.infer<typeof formSchema>) => {
+        saveLocalDraft(values);
+    }, 500);
+
     const onSubmit = useCallback(async (values: z.infer<typeof formSchema>) => {
         if (isSuccess) return;
+
+        debouncedLocalSave.cancel();
 
         const formData = new FormData();
         formData.append("title", values.title);
@@ -68,6 +113,7 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
 
             if (result?.success) {
                 setIsSuccess(true);
+                clearLocalDraft();
                 toast.success("笔记创建成功！", {
                     description: "正在跳转回首页...",
                     duration: 2000,
@@ -78,26 +124,44 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
                     router.refresh();
                 }, 1000);
 
-                // 人为挂起 Promise，保持禁用状态直到跳转
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             toast.error("创建失败", { description: "请检查网络或稍后重试" });
         }
-    }, [isSuccess, router]);
+    }, [isSuccess, router, debouncedLocalSave]);
 
     // ⌨️ 快捷键监听
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
             if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                form.handleSubmit(onSubmit)();
+                handleSubmit(onSubmit)();
             }
         };
         document.addEventListener("keydown", down);
         return () => document.removeEventListener("keydown", down);
-    }, [form, onSubmit]); // ✅ 现在 onSubmit 是稳定的，可以作为依赖
+    }, [handleSubmit, onSubmit]);
+
+    // 👂 监听本地草稿恢复提示
+    useEffect(() => {
+        if (initialDraft) {
+            toast.warning("已自动恢复上次未提交的草稿内容。", { duration: 5000 });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // 👂 监听表单变化 (自动保存到本地草稿)
+    useEffect(() => {
+
+        const subscription = watch((value) => {
+            if (value) {
+                debouncedLocalSave(value as z.infer<typeof formSchema>);
+            }
+        });
+        return () => subscription.unsubscribe();
+    }, [watch, debouncedLocalSave]);
 
     const isButtonDisabled = isSubmitting || isSuccess;
 
@@ -116,7 +180,7 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 
                     <FormField
-                        control={form.control}
+                        control={control}
                         name="title"
                         render={({ field }) => (
                             <FormItem>
@@ -136,7 +200,7 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
-                            control={form.control}
+                            control={control}
                             name="category"
                             render={({ field }) => (
                                 <FormItem>
@@ -154,7 +218,7 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
                         />
 
                         <FormField
-                            control={form.control}
+                            control={control}
                             name="tags"
                             render={({ field }) => (
                                 <FormItem>
@@ -172,7 +236,7 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
                     </div>
 
                     <FormField
-                        control={form.control}
+                        control={control}
                         name="content"
                         render={({ field }) => (
                             <FormItem>
