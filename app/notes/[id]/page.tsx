@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, Calendar, Clock, Folder, Hash } from "lucide-react"; // 👈 新增图标
 import NoteDetailActions from "@/components/note-detail-actions";
 import { Badge } from "@/components/ui/badge"; // 👈 引入 Badge 组件
-
+import AISummaryCard from "@/components/ai-summary-card"; // 👈 引入
 interface PageProps {
     params: Promise<{
         id: string;
@@ -80,7 +80,9 @@ export default async function NoteDetailPage(props: PageProps) {
                     </div>
                 </div>
             </header>
-
+            <section className="mb-8">
+                <AISummaryCard noteId={note.id} initialSummary={note.summary} />
+            </section>
             {/* Markdown 内容 */}
             <article className="prose prose-slate prose-lg max-w-none 
         prose-headings:font-bold prose-h1:text-3xl 
