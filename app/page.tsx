@@ -43,8 +43,8 @@ export default async function Home(props: HomeProps) {
           </div>
 
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">我的知识库</h1>
-            {user && <p className="text-sm text-muted-foreground mt-1">你好, {user.name}</p>}
+            <h1 className="text-3xl font-bold tracking-tight text-foreground font-serif-sc">我的知识库</h1>
+            {user && <p className="text-sm text-muted-foreground mt-1 font-serif-sc">你好, {user.name}</p>}
           </div>
         </div>
 

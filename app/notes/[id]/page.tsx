@@ -46,7 +46,7 @@ export default async function NoteDetailPage(props: PageProps) {
             <header className="space-y-4">
 
 
-                <h1 className="text-4xl font-extrabold tracking-tight text-slate-600 leading-tight">
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-700 leading-tight font-serif-sc">
                     {note.title}
                 </h1>
                 {/* 分类与标签展示区 (新增) */}

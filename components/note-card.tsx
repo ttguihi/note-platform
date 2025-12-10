@@ -40,7 +40,7 @@ export default function NoteCard({ note }: NoteProps) {
             <Card className="hover:shadow-lg transition-all cursor-pointer hover:-translate-y-1 h-full flex flex-col">
                 <CardHeader>
                     <div className="flex justify-between items-start gap-2">
-                        <CardTitle className="text-lg font-bold leading-tight line-clamp-1" title={note.title}>
+                        <CardTitle className="font-serif-sc text-lg font-bold leading-tight line-clamp-1 " title={note.title}>
                             {note.title}
                         </CardTitle>
                     </div>
