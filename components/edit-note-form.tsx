@@ -1,4 +1,3 @@
-// components/edit-note-form.tsx
 'use client';
 
 import { useState, useEffect, useCallback } from "react";
@@ -14,7 +13,7 @@ import { useRouter } from "next/navigation";
 import TagInput from "@/components/tag-input";
 import CategoryInput from "@/components/category-input";
 import { Input } from "@/components/ui/input";
-import { Loader2, Cloud } from "lucide-react";
+import { Loader2, Cloud, ImagePlus } from "lucide-react"; // 👈 新增 ImagePlus
 import { useDebouncedCallback } from "use-debounce";
 import {
     Form,
@@ -43,13 +42,10 @@ interface EditNoteFormProps {
     existingCategories: string[];
 }
 
-// --- LocalStorage 工具函数 ---
-
 const getDraftKey = (noteId: string) => `note-draft-${noteId}`;
 
 const saveLocalDraft = (noteId: string, data: z.infer<typeof formSchema>) => {
     try {
-        // 使用 window 对象前，确保在客户端环境 (虽然 use client 已经保证了，但习惯上避免直接在顶层执行)
         if (typeof window !== 'undefined') {
             localStorage.setItem(getDraftKey(noteId), JSON.stringify(data));
             localStorage.setItem(`${getDraftKey(noteId)}-timestamp`, new Date().toISOString());
@@ -61,10 +57,9 @@ const saveLocalDraft = (noteId: string, data: z.infer<typeof formSchema>) => {
 
 const getLocalDraft = (noteId: string): z.infer<typeof formSchema> | null => {
     try {
-        if (typeof window === 'undefined') return null; // 服务器端不读取 localStorage
+        if (typeof window === 'undefined') return null;
         const draft = localStorage.getItem(getDraftKey(noteId));
         return draft ? formSchema.parse(JSON.parse(draft)) : null;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
         return null;
     }
@@ -81,22 +76,19 @@ const clearLocalDraft = (noteId: string) => {
     }
 };
 
-// --- 组件开始 ---
-
 export default function EditNoteForm({ note, existingCategories }: EditNoteFormProps) {
     const router = useRouter();
 
-    // 状态管理
     const [isSuccess, setIsSuccess] = useState(false);
+    // 👇 新增图片上传状态
+    const [isUploading, setIsUploading] = useState(false);
+
     const initialDraft = getLocalDraft(note.id);
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
 
-    // FIX 1: Hydration 修复: lastSavedTime 初始值设为 null，避免在 SSR 时调用 new Date()
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
-    // FIX 2: Hydration 修复: 增加 mounted 状态
     const [isMounted, setIsMounted] = useState(false);
 
-    // 初始化表单，优先使用本地草稿
     const formMethods = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -107,24 +99,92 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         },
     });
 
-    const { watch, control, handleSubmit, formState } = formMethods; // 修正解构方式
+    // 👈 解构 setValue, getValues
+    const { watch, control, handleSubmit, formState, setValue, getValues } = formMethods;
     const { isSubmitting } = formState;
 
-    // FIX 3: Hydration 修复: 在客户端设置初始时间和 mounted 状态
     useEffect(() => {
-        // 客户端加载后，设置 mounted 状态
         setIsMounted(true);
-        // 设置初始的“已保存时间”
         setLastSavedTime(new Date());
     }, []);
 
-    // --- 逻辑函数区域 ---
+    // --- 📸 图片上传逻辑 (与 CreateNoteForm 相同) ---
+    const handlePaste = async (e: React.ClipboardEvent) => {
+        const items = e.clipboardData.items;
+        let file: File | null = null;
 
-    // 1. 自动保存逻辑 (防抖)
+        for (const item of items) {
+            if (item.type.startsWith("image")) {
+                file = item.getAsFile();
+                break;
+            }
+        }
+
+        if (!file) return;
+
+        // 👇👇👇 关键修改开始 👇👇👇
+        // 使用 e.target 获取真正的 textarea 元素
+        const textarea = e.target as HTMLTextAreaElement;
+
+        // 如果触发粘贴的不是 textarea (比如误触了边框)，直接忽略，防止报错
+        if (textarea.tagName !== "TEXTAREA") return;
+        // 👆👆👆 关键修改结束 👆👆👆
+
+        e.preventDefault();
+
+        // 现在 startPos 是正确的光标位置了
+        const startPos = textarea.selectionStart || 0;
+        const endPos = textarea.selectionEnd || 0;
+
+        try {
+            setIsUploading(true);
+            const loadingToast = toast.loading("正在上传图片...");
+
+            const currentContent = getValues("content");
+            // 切割文本
+            const beforeText = currentContent.substring(0, startPos);
+            const afterText = currentContent.substring(endPos);
+            const placeholder = `![上传中...](...)`;
+
+            // 插入占位符
+            setValue("content", `${beforeText}${placeholder}${afterText}`, { shouldDirty: true });
+
+            // 上传
+            const response = await fetch(`/api/upload?filename=${file.name}`, {
+                method: 'POST',
+                body: file,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error("Server Error:", response.status, errorText);
+                throw new Error(`Upload failed: ${response.status} ${errorText}`);
+            }
+            const data = await response.json();
+
+            // 替换占位符
+            // 注意：这里重新获取 content 是为了防止用户在上传期间又输入了文字导致丢失
+            // 但为了简单起见，且通常几秒钟很快，我们直接替换占位符字符串
+            const newContent = getValues("content").replace(placeholder, `![image](${data.url})`);
+            setValue("content", newContent, { shouldDirty: true });
+
+            toast.dismiss(loadingToast);
+            toast.success("图片上传成功");
+
+        } catch (error) {
+            console.error(error);
+            toast.error("图片上传失败");
+            const content = getValues("content").replace(`![上传中...](...)`, "");
+            setValue("content", content);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+    // ----------------------
+
     const debouncedAutoSave = useDebouncedCallback(async (values: z.infer<typeof formSchema>) => {
-        if (isSubmitting || isSuccess) return;
+        if (isSubmitting || isSuccess || isUploading) return; // 上传中不自动保存
 
-        // 步骤 1: 立即保存到 LocalStorage 作为本地草稿 (离线保障)
         saveLocalDraft(note.id, values);
 
         setSaveStatus("saving");
@@ -136,26 +196,21 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         formData.append("tags", values.tags.join(","));
 
         try {
-            // 尝试同步到服务器
             const result = await updateNote(formData);
             if (result?.success) {
                 setSaveStatus("saved");
-                setLastSavedTime(new Date()); // 成功同步后更新时间
-                // 步骤 2: 服务器保存成功后，清除本地草稿
+                setLastSavedTime(new Date());
                 clearLocalDraft(note.id);
                 router.refresh();
             } else {
                 setSaveStatus("error");
             }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
-            // 步骤 3: 网络错误/离线状态
             setSaveStatus("error");
-            console.warn("自动保存到服务器失败，数据已保存到本地草稿。");
+            console.warn("自动保存失败");
         }
     }, 1000);
 
-    // 2. 手动提交逻辑
     const onManualSubmit = useCallback(async (values: z.infer<typeof formSchema>) => {
         if (isSuccess) return;
 
@@ -173,7 +228,6 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
             if (result?.success) {
                 setIsSuccess(true);
-                // 步骤 4: 手动提交成功，清除本地草稿
                 clearLocalDraft(note.id);
                 toast.success("笔记已更新！", {
                     description: "正在返回详情页...",
@@ -187,15 +241,11 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             toast.error("更新失败", { description: "请检查网络或稍后重试" });
         }
     }, [isSuccess, note.id, router, debouncedAutoSave]);
 
-    // --- 监听区域 ---
-
-    // 👂 监听 Ctrl+S (手动同步)
     useEffect(() => {
         const down = (e: KeyboardEvent) => {
             if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
@@ -207,26 +257,19 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         return () => document.removeEventListener("keydown", down);
     }, [handleSubmit, onManualSubmit]);
 
-    // 👂 监听本地草稿恢复提示
     useEffect(() => {
-        if (initialDraft) {
-            // 确保在客户端执行
-            if (typeof window !== 'undefined') {
-                const timestamp = localStorage.getItem(`${getDraftKey(note.id)}-timestamp`);
-                const timeString = timestamp ? new Date(timestamp).toLocaleTimeString() : '上次编辑时';
+        if (initialDraft && typeof window !== 'undefined') {
+            const timestamp = localStorage.getItem(`${getDraftKey(note.id)}-timestamp`);
+            const timeString = timestamp ? new Date(timestamp).toLocaleTimeString() : '上次编辑时';
 
-                toast.warning("已自动恢复本地草稿！", {
-                    description: `上次本地保存时间：${timeString}。`,
-                    duration: 5000,
-                });
-            }
+            toast.warning("已自动恢复本地草稿！", {
+                description: `上次本地保存时间：${timeString}。`,
+                duration: 5000,
+            });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // 👂 监听表单变化 (自动保存到本地和尝试同步到云端)
     useEffect(() => {
-
         const subscription = watch((value) => {
             if (value) {
                 debouncedAutoSave(value as z.infer<typeof formSchema>);
@@ -235,13 +278,12 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         return () => subscription.unsubscribe();
     }, [watch, debouncedAutoSave]);
 
-    const isButtonDisabled = isSubmitting || isSuccess;
+    const isButtonDisabled = isSubmitting || isSuccess || isUploading; // 👈 增加 isUploading
 
     return (
         <Form {...formMethods}>
             <form onSubmit={handleSubmit(onManualSubmit)} className="space-y-6 relative">
 
-                {/* 自动保存状态指示器 */}
                 <div className="absolute -top-12 right-0 flex items-center gap-2 text-sm text-gray-500 transition-all duration-500">
                     {saveStatus === "saving" && (
                         <>
@@ -252,11 +294,9 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                     {saveStatus === "saved" && (
                         <>
                             <Cloud className="h-3 w-3" />
-                            {/* FIX 4: 仅在客户端且时间存在时，渲染动态时间字符串 */}
                             {isMounted && lastSavedTime ? (
                                 <span>云端已同步 {lastSavedTime.toLocaleTimeString()}</span>
                             ) : (
-                                // 服务器端和未同步完成时渲染静态文本
                                 <span>云端已同步</span>
                             )}
                         </>
@@ -268,8 +308,6 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                         </span>
                     )}
                 </div>
-
-                {/* ... (表单字段保持不变) ... */}
 
                 <FormField
                     control={control}
@@ -323,14 +361,20 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                     name="content"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>内容详情</FormLabel>
+                            <FormLabel className="flex justify-between items-center">
+                                内容详情
+                                {isUploading && <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1"><ImagePlus size={12} /> 图片上传中...</span>}
+                            </FormLabel>
                             <FormControl>
-                                <MdEditorLoader
-                                    name="content"
-                                    value={field.value}
-                                    onChange={field.onChange}
-                                    placeholder="在此处开始你的创作..."
-                                />
+                                {/* 👇 传递 onPaste */}
+                                <div onPaste={handlePaste}>
+                                    <MdEditorLoader
+                                        name="content"
+                                        value={field.value}
+                                        onChange={field.onChange}
+                                        placeholder="在此处开始你的创作... (支持粘贴图片)"
+                                    />
+                                </div>
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -346,7 +390,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                         {isButtonDisabled ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                {isSuccess ? "跳转中..." : "保存中..."}
+                                {isUploading ? "上传图片..." : (isSuccess ? "跳转中..." : "保存中...")}
                             </>
                         ) : (
                             <span className="flex items-center">
