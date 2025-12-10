@@ -70,13 +70,13 @@ export default async function NoteDetailPage(props: PageProps) {
                     ))}
                 </div>
                 <div className="flex items-center gap-6 text-sm text-gray-400">
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 ">
                         <Calendar size={14} />
-                        <span>发布于 {format(note.createdAt, "yyyy年MM月dd日")}</span>
+                        <span className="whitespace-nowrap">发布于 {format(note.createdAt, "yyyy年MM月dd日")}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                         <Clock size={14} />
-                        <span>最后编辑 {format(note.updatedAt, "yyyy-MM-dd HH:mm")}</span>
+                        <span className="">最后编辑 {format(note.updatedAt, "yyyy-MM-dd HH:mm")}</span>
                     </div>
                 </div>
             </header>

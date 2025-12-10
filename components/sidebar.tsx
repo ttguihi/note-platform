@@ -1,10 +1,14 @@
-// components/sidebar.tsx
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Folder, Hash, Home } from "lucide-react";
 import { verifySession } from "@/lib/session";
+import { cn } from "@/lib/utils"; // 确保引入 shadcn 的 cn 工具
 
-export default async function Sidebar() {
+interface SidebarProps {
+    className?: string;
+}
+
+export default async function Sidebar({ className }: SidebarProps) {
     const session = await verifySession();
     const userId = session?.userId;
     if (!userId) return null;
@@ -16,21 +20,24 @@ export default async function Sidebar() {
         _count: { category: true },
     });
 
-    // 2. 获取所有已使用的标签 (稍微复杂点，因为是多对多)
-    // 这里简化处理：直接查所有关联了该用户笔记的标签
+    // 2. 获取所有已使用的标签
     const tags = await prisma.tag.findMany({
         where: {
             notes: { some: { userId } }
         },
         include: {
             _count: {
-                select: { notes: { where: { userId } } } // 只统计当前用户的笔记
+                select: { notes: { where: { userId } } }
             }
         }
     });
 
+    // 修改点：
+    // 1. 移除了 fixed width (w-64), hidden, md:block, border-r
+    // 2. 添加了 h-full 以适应父容器高度
+    // 3. 使用 cn() 合并外部传入的 className
     return (
-        <aside className="w-64 shrink-0 hidden md:block space-y-8 pr-6 border-r h-[calc(100vh-100px)] overflow-y-auto">
+        <aside className={cn("space-y-8 pb-4 h-full overflow-y-auto scrollbar-hide", className)}>
             {/* 导航 */}
             <div className="space-y-2">
                 <h3 className="font-semibold text-sm text-gray-500 px-2 mb-2">发现</h3>

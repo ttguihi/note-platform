@@ -1,11 +1,13 @@
-// app/layout.tsx
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+// ❌ 删除下面这行 (Inter 字体)
+// import { Inter } from "next/font/google";s
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/components/theme-provider"; // 👈 1. 引入
+import { ThemeProvider } from "@/components/theme-provider";
 import NextTopLoader from 'nextjs-toploader';
-const inter = Inter({ subsets: ["latin"] });
+
+// ❌ 删除下面这行
+// const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Online Knowledge Notes",
@@ -19,16 +21,19 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      {/* 👆 注意：加 suppressHydrationWarning 是为了防止 next-themes 的水合警告 */}
-      <body className={inter.className}>
-        {/* 👇 2. 包裹 ThemeProvider */}
+      {/* 👇 修改 className：
+          1. 删掉 inter.className
+          2. 加上 "font-sans antialiased" (使用系统默认无衬线字体，且抗锯齿) 
+      */}
+      <body className="font-sans antialiased">
         <ThemeProvider
           attribute="class"
-          defaultTheme="light" // 👈 修改这里：从 "system" 改为 "light"
-          enableSystem={false} // 👈 建议改为 false，强制由用户控制，而不是跟随系统
+          defaultTheme="light"
+          enableSystem={false}
           disableTransitionOnChange={false}
         >
           <NextTopLoader color="#6366f1" showSpinner={false} />
+
           {children}
           <Toaster position="top-center" richColors />
         </ThemeProvider>

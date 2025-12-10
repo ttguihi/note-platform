@@ -45,13 +45,13 @@ export default function SearchBar() {
                 ref={inputRef} // 👈 绑定 ref
                 type="search"
                 placeholder="搜索标题或内容..."
-                className="pl-9 pr-12 bg-white transition-all focus:ring-2 ring-blue-100" // pr-12 给右边留位置
+                className="pl-9 pr-3 bg-white transition-all focus:ring-2 ring-blue-100 md:pr-12" // pr-12 给右边留位置
                 defaultValue={defaultQuery}
                 onChange={(e) => handleSearch(e.target.value)}
             />
 
             {/* 👇 3. 快捷键提示徽章 (KBD 样式) */}
-            <div className="absolute right-2 top-2 pointer-events-none hidden md:flex items-center gap-1">
+            <div className="absolute right-2 top-2 pointer-events-none md:flex items-center gap-1 hidden ">
                 <kbd className="inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
                     <span className="text-xs">⌘</span>K
                 </kbd>
