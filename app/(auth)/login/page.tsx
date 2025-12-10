@@ -117,7 +117,7 @@ export default function LoginPage() {
                 </form>
             </Form>
 
-            <div className="text-center text-sm">
+            <div className="text-center text-sm text-black">
                 还没有账号？
                 <Link href="/register" className="text-blue-600 hover:underline ml-1">
                     去注册

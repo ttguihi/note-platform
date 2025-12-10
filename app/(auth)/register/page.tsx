@@ -66,7 +66,7 @@ export default function RegisterPage() {
                     router.push("/login");
                 }, 1500);
             }
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             toast.error("系统错误", { description: "请稍后重试" });
         }
@@ -143,7 +143,7 @@ export default function RegisterPage() {
                 </form>
             </Form>
 
-            <div className="text-center text-sm">
+            <div className="text-center text-sm text-black" >
                 已有账号？
                 <Link href="/login" className="text-blue-600 hover:underline ml-1">
                     去登录
