@@ -44,6 +44,11 @@ export default async function NoteDetailPage(props: PageProps) {
 
             {/* 笔记头部信息 */}
             <header className="space-y-4">
+
+
+                <h1 className="text-4xl font-extrabold tracking-tight text-slate-600 leading-tight">
+                    {note.title}
+                </h1>
                 {/* 分类与标签展示区 (新增) */}
                 <div className="flex flex-wrap items-center gap-2">
                     {note.category && (
@@ -64,11 +69,6 @@ export default async function NoteDetailPage(props: PageProps) {
                         </Link>
                     ))}
                 </div>
-
-                <h1 className="text-4xl font-extrabold tracking-tight text-slate-600 leading-tight">
-                    {note.title}
-                </h1>
-
                 <div className="flex items-center gap-6 text-sm text-gray-400">
                     <div className="flex items-center gap-1.5">
                         <Calendar size={14} />
