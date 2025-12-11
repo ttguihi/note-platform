@@ -1,15 +1,12 @@
+/* eslint-disable @next/next/no-page-custom-font */
 import type { Metadata } from "next";
-// ❌ 删除下面这行 (Inter 字体)
-// import { Inter } from "next/font/google";s
+
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import NextTopLoader from 'nextjs-toploader';
 import { cn } from "@/lib/utils"; // 建议引入 cn 工具，如果没有这个文件，直接用字符串拼接也可以
-
-// ❌ 删除下面这行
-// const inter = Inter({ subsets: ["latin"] });
-
+import FontLoader from "@/components/font-loader";
 export const metadata: Metadata = {
   title: "Online Knowledge Notes",
   description: "A simple note taking app",
@@ -22,6 +19,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+
+        {/* 👇 2. 使用封装好的客户端组件替代之前的 link 标签 */}
+        <FontLoader />
+
+      </head>
       {/* 👇 关键修改在这里：
           1. 保留了 font-sans antialiased
           2. 新增了 min-h-screen (确保背景撑满全屏)
@@ -29,7 +32,7 @@ export default function RootLayout({
       */}
       <body className={cn(
         "font-sans antialiased min-h-screen",
-        "bg-gradient-to-br from-blue-50 via-white to-blue-100", // 亮色模式渐变
+        "bg-linear-to-br from-blue-50 via-white to-blue-100", // 亮色模式渐变
         "dark:from-slate-950 dark:via-slate-900 dark:to-blue-950" // 暗色模式渐变
       )}>
         <ThemeProvider
