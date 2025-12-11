@@ -85,29 +85,53 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
     const [isSuccess, setIsSuccess] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
 
-    const initialDraft = getLocalDraft(note.id);
-    const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
+    // ❌ 移除顶层 localStorage 读取，修复 Hydration Error
+    // const initialDraft = getLocalDraft(note.id);
 
+    const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
     const [isMounted, setIsMounted] = useState(false);
 
+    // ✅ useForm 初始化只使用服务端数据 (note)
     const formMethods = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            title: initialDraft?.title ?? note.title,
-            category: initialDraft?.category ?? note.category ?? "",
-            tags: initialDraft?.tags ?? note.tags.map(t => t.name),
-            content: initialDraft?.content ?? note.content,
+            title: note.title,
+            category: note.category ?? "",
+            tags: note.tags.map(t => t.name),
+            content: note.content,
         },
     });
 
-    const { watch, control, handleSubmit, formState, setValue, getValues } = formMethods;
+    const { watch, control, handleSubmit, formState, setValue, getValues, reset } = formMethods; // 👈 解构 reset
     const { isSubmitting } = formState;
 
+    // ✅ 在 useEffect 中处理草稿恢复
     useEffect(() => {
         setIsMounted(true);
         setLastSavedTime(new Date());
-    }, []);
+
+        // 仅在客户端执行草稿检查
+        const draft = getLocalDraft(note.id);
+        if (draft) {
+            // 恢复草稿数据
+            reset({
+                title: draft.title ?? note.title,
+                category: draft.category ?? note.category ?? "",
+                tags: draft.tags ?? note.tags.map(t => t.name),
+                content: draft.content ?? note.content,
+            });
+
+            const timestamp = localStorage.getItem(`${getDraftKey(note.id)}-timestamp`);
+            const timeString = timestamp ? new Date(timestamp).toLocaleTimeString() : '上次编辑时';
+
+            toast.warning("已自动恢复本地草稿！", {
+                description: `上次本地保存时间：${timeString}。`,
+                duration: 5000,
+                id: "draft-restore" // 👈 防止重复弹窗
+            });
+        }
+    }, [note.id, note.title, note.category, note.tags, note.content, reset]);
 
     // --- 📸 1. 粘贴上传 ---
     const handlePaste = async (e: React.ClipboardEvent) => {
@@ -124,6 +148,8 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         if (!file) return;
 
         const textarea = e.target as HTMLTextAreaElement;
+        // 如果触发事件的不是 textarea (可能是容器 div)，则尝试查找内部 textarea
+        // 这一步是为了兼容有些编辑器组件结构
         if (textarea.tagName !== "TEXTAREA") return;
 
         e.preventDefault();
@@ -173,7 +199,10 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
             }
             const data = await response.json();
 
-            const newContent = getValues("content").replace(placeholder, `${prefix}![image](${data.url})`);
+            // 重新获取 content 以防在上传期间用户输入了文字，导致位置偏移
+            // 为了简单起见，这里直接做字符串替换。更严谨的做法是重新计算位置。
+            const updatedContent = getValues("content");
+            const newContent = updatedContent.replace(placeholder, `${prefix}![image](${data.url})`);
             setValue("content", newContent, { shouldDirty: true });
 
             toast.dismiss(loadingToast);
@@ -265,18 +294,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         return () => document.removeEventListener("keydown", down);
     }, [handleSubmit, onManualSubmit]);
 
-    useEffect(() => {
-        if (initialDraft && typeof window !== 'undefined') {
-            const timestamp = localStorage.getItem(`${getDraftKey(note.id)}-timestamp`);
-            const timeString = timestamp ? new Date(timestamp).toLocaleTimeString() : '上次编辑时';
-
-            toast.warning("已自动恢复本地草稿！", {
-                description: `上次本地保存时间：${timeString}。`,
-                duration: 5000,
-            });
-        }
-    }, []);
-
+    // 监听变化自动保存
     useEffect(() => {
         const subscription = watch((value) => {
             if (value) {

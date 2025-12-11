@@ -75,20 +75,40 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
     const [isSuccess, setIsSuccess] = useState(false);
     const [isUploading, setIsUploading] = useState(false); // 图片上传状态
 
-    const initialDraft = getLocalDraft();
+    // ❌ 移除顶层调用，修复 Hydration Error
+    // const initialDraft = getLocalDraft();
 
+    // ✅ useForm 初始化只使用空值
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            title: initialDraft?.title || "",
-            category: initialDraft?.category || "",
-            tags: initialDraft?.tags || [],
-            content: initialDraft?.content || "",
+            title: "",
+            category: "",
+            tags: [],
+            content: "",
         },
     });
 
-    const { control, handleSubmit, watch, setValue, getValues } = form;
+    const { control, handleSubmit, watch, setValue, getValues, reset } = form; // 👈 解构 reset
     const { isSubmitting } = form.formState;
+
+    // ✅ 在 useEffect 中恢复草稿
+    useEffect(() => {
+        const draft = getLocalDraft();
+        if (draft) {
+            reset({
+                title: draft.title || "",
+                category: draft.category || "",
+                tags: draft.tags || [],
+                content: draft.content || "",
+            });
+
+            toast.warning("已自动恢复上次未提交的草稿内容。", {
+                duration: 5000,
+                id: "draft-restore" // 👈 防止重复弹窗
+            });
+        }
+    }, [reset]);
 
     // --- 📸 1. 粘贴图片上传 (Ctrl+V) ---
     const handlePaste = async (e: React.ClipboardEvent) => {
@@ -104,7 +124,7 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
 
         if (!file) return;
 
-        // 获取真正的 textarea 元素 (而不是外层的 div)
+        // 获取真正的 textarea 元素
         const textarea = e.target as HTMLTextAreaElement;
         if (textarea.tagName !== "TEXTAREA") return;
 
@@ -162,7 +182,8 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
             const data = await response.json();
 
             // 替换占位符为真实链接
-            const newContent = getValues("content").replace(placeholder, `${prefix}![image](${data.url})`);
+            const updatedContent = getValues("content");
+            const newContent = updatedContent.replace(placeholder, `${prefix}![image](${data.url})`);
             setValue("content", newContent, { shouldDirty: true });
 
             toast.dismiss(loadingToast);
@@ -230,13 +251,6 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
         document.addEventListener("keydown", down);
         return () => document.removeEventListener("keydown", down);
     }, [handleSubmit, onSubmit]);
-
-    // 恢复草稿提示
-    useEffect(() => {
-        if (initialDraft) {
-            toast.warning("已自动恢复上次未提交的草稿内容。", { duration: 5000, id: "draft-restored" });
-        }
-    }, []);
 
     // 监听变化自动保存
     useEffect(() => {

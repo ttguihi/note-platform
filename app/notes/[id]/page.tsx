@@ -10,6 +10,7 @@ import { ChevronLeft, Calendar, Clock, Folder, Hash } from "lucide-react"; // �
 import NoteDetailActions from "@/components/note-detail-actions";
 import { Badge } from "@/components/ui/badge"; // 👈 引入 Badge 组件
 import AISummaryCard from "@/components/ai-summary-card"; // 👈 引入
+import rehypeRaw from 'rehype-raw';
 interface PageProps {
     params: Promise<{
         id: string;
@@ -90,7 +91,7 @@ export default async function NoteDetailPage(props: PageProps) {
         prose-img:rounded-xl prose-img:shadow-lg
         bg-white p-8 rounded-xl border shadow-sm">
 
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                     {note.content}
                 </ReactMarkdown>
 
