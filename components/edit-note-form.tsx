@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -13,7 +13,7 @@ import { useRouter } from "next/navigation";
 import TagInput from "@/components/tag-input";
 import CategoryInput from "@/components/category-input";
 import { Input } from "@/components/ui/input";
-import { Loader2, Cloud, ImagePlus } from "lucide-react"; // 👈 新增 ImagePlus
+import { Loader2, Cloud, ImagePlus } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import {
     Form,
@@ -41,6 +41,8 @@ interface EditNoteFormProps {
     };
     existingCategories: string[];
 }
+
+// --- LocalStorage 工具函数 ---
 
 const getDraftKey = (noteId: string) => `note-draft-${noteId}`;
 
@@ -78,9 +80,9 @@ const clearLocalDraft = (noteId: string) => {
 
 export default function EditNoteForm({ note, existingCategories }: EditNoteFormProps) {
     const router = useRouter();
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [isSuccess, setIsSuccess] = useState(false);
-    // 👇 新增图片上传状态
     const [isUploading, setIsUploading] = useState(false);
 
     const initialDraft = getLocalDraft(note.id);
@@ -99,7 +101,6 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         },
     });
 
-    // 👈 解构 setValue, getValues
     const { watch, control, handleSubmit, formState, setValue, getValues } = formMethods;
     const { isSubmitting } = formState;
 
@@ -108,7 +109,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         setLastSavedTime(new Date());
     }, []);
 
-    // --- 📸 图片上传逻辑 (与 CreateNoteForm 相同) ---
+    // --- 📸 1. 粘贴上传 ---
     const handlePaste = async (e: React.ClipboardEvent) => {
         const items = e.clipboardData.items;
         let file: File | null = null;
@@ -122,34 +123,45 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
         if (!file) return;
 
-        // 👇👇👇 关键修改开始 👇👇👇
-        // 使用 e.target 获取真正的 textarea 元素
         const textarea = e.target as HTMLTextAreaElement;
-
-        // 如果触发粘贴的不是 textarea (比如误触了边框)，直接忽略，防止报错
         if (textarea.tagName !== "TEXTAREA") return;
-        // 👆👆👆 关键修改结束 👆👆👆
 
         e.preventDefault();
 
-        // 现在 startPos 是正确的光标位置了
         const startPos = textarea.selectionStart || 0;
         const endPos = textarea.selectionEnd || 0;
 
+        await uploadImage(file, startPos, endPos);
+    };
+
+    // --- 📸 2. 按钮上传 ---
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const currentContent = getValues("content") || "";
+        const startPos = currentContent.length;
+        const endPos = currentContent.length;
+        const prefix = currentContent.endsWith('\n') || currentContent === "" ? "" : "\n";
+
+        await uploadImage(file, startPos, endPos, prefix);
+
+        if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+
+    // --- ☁️ 统一上传逻辑 ---
+    const uploadImage = async (file: File, startPos: number, endPos: number, prefix = "") => {
         try {
             setIsUploading(true);
             const loadingToast = toast.loading("正在上传图片...");
 
-            const currentContent = getValues("content");
-            // 切割文本
+            const currentContent = getValues("content") || "";
             const beforeText = currentContent.substring(0, startPos);
             const afterText = currentContent.substring(endPos);
-            const placeholder = `![上传中...](...)`;
+            const placeholder = `${prefix}![上传中...](...)`;
 
-            // 插入占位符
             setValue("content", `${beforeText}${placeholder}${afterText}`, { shouldDirty: true });
 
-            // 上传
             const response = await fetch(`/api/upload?filename=${file.name}`, {
                 method: 'POST',
                 body: file,
@@ -157,15 +169,11 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error("Server Error:", response.status, errorText);
-                throw new Error(`Upload failed: ${response.status} ${errorText}`);
+                throw new Error(errorText);
             }
             const data = await response.json();
 
-            // 替换占位符
-            // 注意：这里重新获取 content 是为了防止用户在上传期间又输入了文字导致丢失
-            // 但为了简单起见，且通常几秒钟很快，我们直接替换占位符字符串
-            const newContent = getValues("content").replace(placeholder, `![image](${data.url})`);
+            const newContent = getValues("content").replace(placeholder, `${prefix}![image](${data.url})`);
             setValue("content", newContent, { shouldDirty: true });
 
             toast.dismiss(loadingToast);
@@ -173,17 +181,17 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
         } catch (error) {
             console.error(error);
-            toast.error("图片上传失败");
-            const content = getValues("content").replace(`![上传中...](...)`, "");
+            toast.error("上传失败");
+            const content = getValues("content").replace(/!\[上传中\.\.\.\]\(\.\.\.\)/g, "");
             setValue("content", content);
         } finally {
             setIsUploading(false);
         }
     };
-    // ----------------------
 
+    // --- 自动保存 ---
     const debouncedAutoSave = useDebouncedCallback(async (values: z.infer<typeof formSchema>) => {
-        if (isSubmitting || isSuccess || isUploading) return; // 上传中不自动保存
+        if (isSubmitting || isSuccess || isUploading) return;
 
         saveLocalDraft(note.id, values);
 
@@ -278,7 +286,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         return () => subscription.unsubscribe();
     }, [watch, debouncedAutoSave]);
 
-    const isButtonDisabled = isSubmitting || isSuccess || isUploading; // 👈 增加 isUploading
+    const isButtonDisabled = isSubmitting || isSuccess || isUploading;
 
     return (
         <Form {...formMethods}>
@@ -361,12 +369,41 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                     name="content"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel className="flex justify-between items-center">
-                                内容详情
-                                {isUploading && <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1"><ImagePlus size={12} /> 图片上传中...</span>}
+                            <FormLabel className="flex justify-between items-end mb-1">
+                                <span>内容详情</span>
+
+                                {/* 👇 上传按钮区域 */}
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="hidden"
+                                        ref={fileInputRef}
+                                        onChange={handleFileSelect}
+                                    />
+
+                                    {isUploading && (
+                                        <span className="text-xs text-blue-500 animate-pulse flex items-center gap-1">
+                                            <Loader2 size={12} className="animate-spin" /> 上传中...
+                                        </span>
+                                    )}
+
+                                    <Button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        className="h-7 px-3 text-xs gap-1.5"
+                                        onClick={() => fileInputRef.current?.click()}
+                                        disabled={isUploading}
+                                    >
+                                        <ImagePlus size={14} />
+                                        插入图片
+                                    </Button>
+                                </div>
+                                {/* 👆 上传按钮区域结束 */}
+
                             </FormLabel>
                             <FormControl>
-                                {/* 👇 传递 onPaste */}
                                 <div onPaste={handlePaste}>
                                     <MdEditorLoader
                                         name="content"
@@ -390,7 +427,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                         {isButtonDisabled ? (
                             <>
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                {isUploading ? "上传图片..." : (isSuccess ? "跳转中..." : "保存中...")}
+                                {isUploading ? "等待图片..." : (isSuccess ? "跳转中..." : "保存修改")}
                             </>
                         ) : (
                             <span className="flex items-center">
