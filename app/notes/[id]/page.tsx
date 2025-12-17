@@ -52,7 +52,7 @@ export default async function NoteDetailPage(props: PageProps) {
                     {note.title}
                 </h1>
                 {/* 分类与标签展示区 (新增) */}
-                <div className="flex flex-wrap items-center gap-2 mt-2">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
                     {note.category && (
                         <Link href={`/?category=${note.category}`}>
                             <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-100 hover:bg-blue-100 cursor-pointer gap-1 px-3 py-1">
@@ -92,10 +92,14 @@ export default async function NoteDetailPage(props: PageProps) {
         prose-img:rounded-xl prose-img:shadow-lg
         bg-white p-8 rounded-xl border shadow-sm">
 
-                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[
-                    rehypeRaw,      // 1. 先允许 HTML 解析
-                    rehypeSanitize  // 2. 紧接着立马清洗！把 script/iframe 等危险标签干掉
-                ]}>
+                <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                    components={{
+                        // 👇 强制把 markdown 中的 p 标签渲染成 div，彻底避免嵌套报错
+                        p: ({ node, ...props }) => <div {...props} className="mb-4 last:mb-0" />
+                    }}
+                >
                     {note.content}
                 </ReactMarkdown>
 
