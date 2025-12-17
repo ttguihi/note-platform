@@ -16,7 +16,7 @@ export async function signup(formData: FormData) {
     if (!email || !password || !name) {
         return { error: "所有字段都是必填的" };
     }
-
+    // 1. 检查 -> 2. 加密 -> 3. 存库 -> 4. 返回结果
     // 1. 检查用户是否存在
     const existingUser = await prisma.user.findUnique({ where: { email } });
     if (existingUser) {
@@ -25,6 +25,7 @@ export async function signup(formData: FormData) {
 
     // 2. 密码加密
     const hashedPassword = await bcrypt.hash(password, 10);
+    // 数据库里永远不能存明文密码。bcrypt 是目前最稳健的哈希算法之一，10 是计算强度（Salt Rounds），平衡了安全性和性能。
 
     // 3. 创建用户
     await prisma.user.create({

@@ -26,6 +26,7 @@ function parseTags(tagsString: string) {
         .map((name) => ({
             where: { name },
             create: { name },
+            // 这避免了复杂的 if-else 判断，一行代码搞定“查找或创建”
         }));
 }
 // 📌 Action: 创建笔记
@@ -53,9 +54,10 @@ export async function createNote(formData: FormData) {
 
         revalidatePath("/");
         return { success: true, id: newNote.id };
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
-        throw new Error("创建失败");
+        console.error("Create Note Error:", error); // 在服务器终端打印详细日志
+        // 如果是已知错误（比如 input 校验），可以返回具体 message
+        throw new Error("创建笔记失败，请检查输入或稍后重试");
     }
 }
 
@@ -82,6 +84,9 @@ export async function updateNote(formData: FormData) {
                 category: category || null,
                 tags: {
                     // 更新逻辑：先断开所有旧标签，再重新关联新标签
+                    // 处理多对多关系更新最稳健、最不容易出 Bug 的写法
+                    // 假设笔记原标签是 ["A", "B"]，用户改成了 ["A", "C"]。
+                    // 如果不写 set: []，Prisma 可能会糊涂，不知道你是要删掉 "B" 还是要保留。
                     set: [],
                     connectOrCreate: parseTags(tagsStr),
                 },
@@ -128,6 +133,9 @@ export async function generateNoteSummary(noteId: string) {
 
         // 2. 调用 AI
         const completion = await openai.chat.completions.create({
+            // temperature: 0.3：设置得很好。摘要生成需要准确概括，不需要 AI 发散思维乱编故事，0.3 是个很稳的数值。
+
+            // role: "system"：指定了“知识管理助手”的人设，这能让 AI 输出的摘要更专业
             messages: [
                 {
                     role: "system",

@@ -17,7 +17,7 @@ export default async function CreateNotePage() {
             category: { not: null } // 排除空分类
         },
         select: { category: true },
-        distinct: ['category'],
+        distinct: ['category'],//“你自己在底层把重复的分类去掉，只给我返回不重复的那个清单”
         orderBy: { category: 'asc' }
     });
 
