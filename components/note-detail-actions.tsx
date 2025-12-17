@@ -1,121 +1,108 @@
+// components/note-detail-actions.tsx
 'use client';
 
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Trash2, Edit, Loader2 } from "lucide-react";
+import { deleteNote } from "@/app/actions";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { toast } from "sonner";
+
+// 👇 引入 Alert Dialog 相关组件
 import {
-    Pagination,
-    PaginationContent,
-    PaginationItem,
-    PaginationLink,
-    PaginationNext,
-    PaginationPrevious,
-    PaginationEllipsis,
-} from "@/components/ui/pagination";
-import { useSearchParams, usePathname } from "next/navigation";
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
-interface PaginationControlProps {
-    totalCount: number; // 总笔记数
-    pageSize?: number;  // 每页显示多少条
-}
+export default function NoteDetailActions({ noteId }: { noteId: string }) {
+    const router = useRouter();
+    const [isDeleting, setIsDeleting] = useState(false); // 控制删除中的 Loading 状态
 
-export default function PaginationControl({ totalCount, pageSize = 9 }: PaginationControlProps) {
-    const pathname = usePathname();
-    const searchParams = useSearchParams();
+    const handleDelete = async () => {
+        setIsDeleting(true); // 开始转圈
 
-    // 1. 计算总页数
-    const totalPages = Math.ceil(totalCount / pageSize);
+        try {
+            // 1. 调用 Server Action
+            await deleteNote(noteId);
 
-    // 2. 获取当前页码 (默认为 1)
-    const currentPage = Number(searchParams.get("page")) || 1;
+            // 2. 成功提示
+            toast.success("笔记已删除", {
+                description: "正在返回首页...",
+                duration: 1500,
+            });
 
-    // 如果没有内容或只有 1 页，就不显示分页器
-    if (totalPages <= 1) return null;
+            // 3. 跳转
+            router.push("/");
+            router.refresh();
 
-    // 🛠️ 核心工具：生成带参数的 URL
-    const createPageURL = (pageNumber: number | string) => {
-        const params = new URLSearchParams(searchParams);
-        params.set("page", pageNumber.toString());
-        return `${pathname}?${params.toString()}`;
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (error) {
+            setIsDeleting(false); // 失败了要停止转圈
+            toast.error("删除失败", {
+                description: "请稍后重试",
+            });
+        }
     };
 
     return (
-        <Pagination className="mt-8">
-            <PaginationContent>
-                {/* 上一页 */}
-                <PaginationItem>
-                    <PaginationPrevious
-                        href={currentPage > 1 ? createPageURL(currentPage - 1) : "#"}
-                        aria-disabled={currentPage <= 1}
-                        className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                </PaginationItem>
+        <div className="flex gap-2">
+            <Link href={`/notes/${noteId}/edit`}>
+                <Button variant="outline" size="sm" className="gap-2">
+                    <Edit size={16} /> 编辑
+                </Button>
+            </Link>
 
-                {/* --- 第一页 (永远显示) --- */}
-                <PaginationItem>
-                    <PaginationLink href={createPageURL(1)} isActive={currentPage === 1}>
-                        1
-                    </PaginationLink>
-                </PaginationItem>
+            {/* 👇 这是一个完整的弹窗组件结构 */}
+            <AlertDialog>
+                {/* Trigger: 点击这个按钮会打开弹窗 */}
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" className="gap-2">
+                        {isDeleting ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                        删除
+                    </Button>
+                </AlertDialogTrigger>
 
-                {/* 左省略号：如果当前页大于 3，说明 1 和当前页中间至少隔了一个 2，需要省略号 */}
-                {currentPage > 3 && (
-                    <PaginationItem>
-                        <PaginationEllipsis />
-                    </PaginationItem>
-                )}
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>你确定要删除这条笔记吗？</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            此操作无法撤销。这条笔记将从服务器中永久移除。
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
 
-                {/* --- 👈 左邻居 (当前页的前一页) --- */}
-                {/* 只有当它不是第一页时才显示 */}
-                {currentPage > 2 && (
-                    <PaginationItem>
-                        <PaginationLink href={createPageURL(currentPage - 1)}>
-                            {currentPage - 1}
-                        </PaginationLink>
-                    </PaginationItem>
-                )}
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>取消</AlertDialogCancel>
 
-                {/* --- 📍 当前页 (如果不是第一页也不是最后一页) --- */}
-                {currentPage !== 1 && currentPage !== totalPages && (
-                    <PaginationItem>
-                        <PaginationLink href={createPageURL(currentPage)} isActive>
-                            {currentPage}
-                        </PaginationLink>
-                    </PaginationItem>
-                )}
-
-                {/* --- 👉 右邻居 (当前页的后一页) --- */}
-                {/* 只有当它不是最后一页时才显示 */}
-                {currentPage < totalPages - 1 && (
-                    <PaginationItem>
-                        <PaginationLink href={createPageURL(currentPage + 1)}>
-                            {currentPage + 1}
-                        </PaginationLink>
-                    </PaginationItem>
-                )}
-
-                {/* 右省略号：如果当前页离最后一页还远，显示省略号 */}
-                {currentPage < totalPages - 2 && (
-                    <PaginationItem>
-                        <PaginationEllipsis />
-                    </PaginationItem>
-                )}
-
-                {/* --- 最后一页 (永远显示) --- */}
-                {totalPages > 1 && (
-                    <PaginationItem>
-                        <PaginationLink href={createPageURL(totalPages)} isActive={currentPage === totalPages}>
-                            {totalPages}
-                        </PaginationLink>
-                    </PaginationItem>
-                )}
-
-                {/* 下一页 */}
-                <PaginationItem>
-                    <PaginationNext
-                        href={currentPage < totalPages ? createPageURL(currentPage + 1) : "#"}
-                        aria-disabled={currentPage >= totalPages}
-                        className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                </PaginationItem>
-            </PaginationContent>
-        </Pagination>
+                        {/* Action: 点击确认后执行 handleDelete */}
+                        <AlertDialogAction
+                            onClick={(e) => {
+                                // 阻止默认关闭行为，让我们自己控制流程（可选，为了体验更好建议加上）
+                                e.preventDefault();
+                                handleDelete();
+                            }}
+                            className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                            disabled={isDeleting}
+                        >
+                            {isDeleting ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    删除中...
+                                </>
+                            ) : (
+                                "确认删除"
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </div>
     );
 }
