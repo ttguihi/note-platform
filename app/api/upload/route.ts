@@ -1,8 +1,12 @@
 // app/api/upload/route.ts
 import { put } from '@vercel/blob';
 import { NextResponse } from 'next/server';
-
+import { verifySession } from '@/lib/session'; // 👈 引入鉴权
 export async function POST(request: Request) {
+    const session = await verifySession();
+    if (!session?.userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get('filename') || 'image.png';
 
@@ -21,6 +25,7 @@ export async function POST(request: Request) {
 
     try {
         // 2. 上传到 Vercel Blob
+        // 内存友好的“流式传输”
         const blob = await put(filename, request.body, {
             access: 'public',
             token: token,
