@@ -1,6 +1,11 @@
 # 📘 Online Knowledge Base (在线知识笔记平台)
 
-[![Vercel App](https://therealsujitk-vercel-badge.vercel.app/?app=jiale-note-platform)](https://jiale-note-platform.vercel.app)
+![Vercel](https://img.shields.io/badge/vercel-%23000000.svg?style=flat&logo=vercel&logoColor=white)
+![Next.js](https://img.shields.io/badge/next.js-000000?style=flat&logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=flat&logo=react&logoColor=%2361DAFB)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=flat&logo=typescript&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=flat&logo=tailwind-css&logoColor=white)
+![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=flat&logo=Prisma&logoColor=white)
 
 一个基于 Next.js 15 全栈开发的现代化在线知识笔记平台。支持 Markdown 写作、图片上传、多维度筛选及响应式设计，旨在提供流畅、沉浸的笔记体验。
 
@@ -16,6 +21,7 @@
   - **Markdown 编辑**：支持标准语法，所见即所得。
   - **实时预览**：编辑与阅读无缝切换。
   - **CRUD 管理**：完整的笔记新增、编辑、删除与查看流程。
+  - **快捷键设置**：支持 **Ctrl+K** 快速搜索，**Ctrl+S** 快速保存，用户操作更丝滑。
 
 - **🗂️ 多维分类与组织**
   - **分类管理 (Category)**：支持笔记归档分类。
@@ -38,9 +44,10 @@
   - **图片上传优化**：支持 **Ctrl+V** 粘贴上传及移动端调用相册上传（集成 Vercel Blob 自动生成 CDN 链接）。
 
 - **🎨 交互与视觉增强**
-  - **主题切换**：内置明亮/暗黑模式 (Dark/Light Mode)，跟随系统或手动切换。
+  - **主题切换**：内置明亮/暗黑模式 (Dark/Light Mode)，可手动切换。
   - **极致性能**：采用 Next.js 服务端渲染 (SSR) 配合 Suspense 懒加载，首屏加载极快。
   - **反馈交互**：集成 Sonner Toast 通知，关键操作（保存、上传、错误）均有丝滑提示。
+  - **加载优化**：使用 NextTopLoader 组件，加载过程可视化，优化用户体验。
 
 ### 🤖 AI 智能融合
 
