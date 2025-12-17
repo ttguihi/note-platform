@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import NextTopLoader from 'nextjs-toploader';
 import { cn } from "@/lib/utils"; // 建议引入 cn 工具，如果没有这个文件，直接用字符串拼接也可以
 import FontLoader from "@/components/font-loader";
+import SyncInitializer from "@/components/sync-initializer";
 export const metadata: Metadata = {
   title: "Online Knowledge Notes",
   description: "A simple note taking app",
@@ -41,6 +42,7 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange={false}
         >
+          <SyncInitializer />
           {/* ✅ 你的进度条动画在这里，完全保留 */}
           <NextTopLoader color="#6366f1" showSpinner={false} />
 

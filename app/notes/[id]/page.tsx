@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"; // 👈 引入 Badge 组件
 import AISummaryCard from "@/components/ai-summary-card"; // 👈 引入
 import rehypeSanitize from 'rehype-sanitize'; // 👈 引入保镖
 import rehypeRaw from 'rehype-raw';
+import NoteContentViewer from "@/components/note-content-viewer";
 interface PageProps {
     params: Promise<{
         id: string;
@@ -87,21 +88,13 @@ export default async function NoteDetailPage(props: PageProps) {
             </section>
             {/* Markdown 内容 */}
             <article className="prose prose-slate prose-lg max-w-none 
-        prose-headings:font-bold prose-h1:text-3xl 
-        prose-a:text-blue-600 hover:prose-a:underline
-        prose-img:rounded-xl prose-img:shadow-lg
-        bg-white p-8 rounded-xl border shadow-sm">
+                prose-headings:font-bold prose-h1:text-3xl 
+                prose-a:text-blue-600 hover:prose-a:underline
+                prose-img:rounded-xl prose-img:shadow-lg
+                bg-white p-8 rounded-xl border shadow-sm relative">
 
-                <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw, rehypeSanitize]}
-                    components={{
-                        // 👇 强制把 markdown 中的 p 标签渲染成 div，彻底避免嵌套报错
-                        p: ({ node, ...props }) => <div {...props} className="mb-4 last:mb-0" />
-                    }}
-                >
-                    {note.content}
-                </ReactMarkdown>
+                {/* 👇 使用支持离线读取的组件 */}
+                <NoteContentViewer serverNote={note} />
 
             </article>
         </main>
