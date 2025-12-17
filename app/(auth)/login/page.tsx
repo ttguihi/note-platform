@@ -17,7 +17,7 @@ import {
     FormMessage,
 } from "@/components/ui/form";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 // 1. 定义验证规则 (Schema)
 const formSchema = z.object({
@@ -30,7 +30,7 @@ const formSchema = z.object({
 
 export default function LoginPage() {
     const [serverError, setServerError] = useState<string>("");
-
+    const [showPassword, setShowPassword] = useState(false);
     // 2. 初始化表单
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -93,7 +93,25 @@ export default function LoginPage() {
                             <FormItem>
                                 <FormLabel>密码</FormLabel>
                                 <FormControl>
-                                    <Input type="password" {...field} />
+                                    <div className="relative">
+                                        <Input
+                                            type={showPassword ? "text" : "password"} // 动态切换类型
+                                            {...field}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                        >
+                                            {showPassword ? (
+                                                <EyeOff className="h-4 w-4 text-gray-500" />
+                                            ) : (
+                                                <Eye className="h-4 w-4 text-gray-500" />
+                                            )}
+                                        </Button>
+                                    </div>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
