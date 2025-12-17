@@ -30,6 +30,7 @@ export async function POST(request: Request) {
         });
 
         return NextResponse.json(blob);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error("❌ Vercel Blob Error:", error);
         return NextResponse.json({

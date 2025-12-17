@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-page-custom-font */
 import type { Metadata } from "next";
 
 import "./globals.css";
@@ -32,6 +31,7 @@ export default function RootLayout({
       */}
       <body className={cn(
         "font-sans antialiased min-h-screen",
+        // 让网页看起来有一种漫反射的光泽感
         "bg-linear-to-br from-blue-50 via-white to-blue-100", // 亮色模式渐变
         "dark:from-slate-950 dark:via-slate-900 dark:to-blue-950" // 暗色模式渐变
       )}>

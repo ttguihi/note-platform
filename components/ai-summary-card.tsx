@@ -29,6 +29,7 @@ export default function AISummaryCard({ noteId, initialSummary }: AISummaryCardP
             } else {
                 toast.error(result.message || "生成失败");
             }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             toast.error("请求失败，请稍后重试");
         } finally {

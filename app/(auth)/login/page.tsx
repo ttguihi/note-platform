@@ -22,6 +22,9 @@ import { Loader2 } from "lucide-react";
 // 1. 定义验证规则 (Schema)
 const formSchema = z.object({
     email: z.string().email({ message: "请输入有效的邮箱地址" }),
+    // 格式不对 根本不发请求
+    // 如果用户没填密码，或者邮箱格式乱写，Zod 会直接在浏览器端拦截，完全不会触发网络请求。
+    // 这既节省了服务器资源，又给了用户毫秒级的错误反馈
     password: z.string().min(1, { message: "密码不能为空" }),
 });
 

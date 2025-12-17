@@ -12,12 +12,16 @@ export default async function Sidebar({ className }: SidebarProps) {
     const session = await verifySession();
     const userId = session?.userId;
     if (!userId) return null;
-
+    // const whereCondition: any = { userId };
     // 1. 聚合查询：获取所有已使用的分类
     const categories = await prisma.note.groupBy({
         by: ['category'],
         where: { userId, category: { not: null } },
         _count: { category: true },
+    });
+
+    const totalNotesCount = await prisma.note.count({
+        where: { userId }
     });
 
     // 2. 获取所有已使用的标签
@@ -42,8 +46,12 @@ export default async function Sidebar({ className }: SidebarProps) {
             <div className="space-y-2">
                 <h3 className="font-semibold text-sm text-gray-500 px-2 mb-2">发现</h3>
                 <Link href="/">
-                    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-slate-100 text-sm font-medium text-slate-700">
-                        <Home size={16} /> 全部笔记
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-slate-100 text-sm font-medium text-slate-700">
+                        <span className="flex items-center gap-2">
+                            <Home size={16} /> 全部笔记
+                        </span>
+                        {/* ✅ 显示总数 */}
+                        <span className="text-xs text-gray-400">{totalNotesCount}</span>
                     </div>
                 </Link>
             </div>
@@ -74,6 +82,9 @@ export default async function Sidebar({ className }: SidebarProps) {
                         <Link key={t.id} href={`/?tag=${t.name}`}>
                             <span className="px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs text-slate-600 cursor-pointer flex items-center gap-1">
                                 <Hash size={10} /> {t.name}
+                                <span className="ml-1 text-[10px] text-slate-400 opacity-70">
+                                    {t._count.notes}
+                                </span>
                             </span>
                         </Link>
                     ))}

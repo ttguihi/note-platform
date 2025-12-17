@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import NoteCard from "@/components/note-card";
 import PaginationControl from "@/components/pagination-control";
+import { Prisma } from "@prisma/client";
 
 interface NoteListProps {
     userId: string;
@@ -19,12 +20,15 @@ export default async function NoteList({ userId, searchParams }: NoteListProps) 
     const skip = (currentPage - 1) * pageSize;
 
     // --- 构建过滤条件 ---
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const whereCondition: any = { userId };
 
+    // 只能查我自己的笔记
+    const whereCondition: Prisma.NoteWhereInput = { userId };
+
+    // 添加筛选条件
     if (searchParams.category) whereCondition.category = searchParams.category;
     if (searchParams.tag) whereCondition.tags = { some: { name: searchParams.tag } };
     if (searchParams.query) {
+        // 模糊搜索!!! 并设置大小写不敏感
         const q = searchParams.query;
         whereCondition.OR = [
             { title: { contains: q, mode: 'insensitive' } },
@@ -34,7 +38,10 @@ export default async function NoteList({ userId, searchParams }: NoteListProps) 
 
     // --- 执行慢查询 (并行查询) ---
     // 这里的延迟会被 Suspense 捕获，显示骨架屏
+    // 并行查询笔记和笔记总数
     const [notes, totalCount] = await prisma.$transaction([
+
+        // 提交筛选部分并配置相关规则
         prisma.note.findMany({
             where: whereCondition,
             orderBy: { createdAt: "desc" },
@@ -68,5 +75,5 @@ export default async function NoteList({ userId, searchParams }: NoteListProps) 
                 <PaginationControl totalCount={totalCount} pageSize={pageSize} />
             </div>
         </div>
-    );
+    )
 }

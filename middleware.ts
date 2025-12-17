@@ -31,6 +31,22 @@ export default async function middleware(req: NextRequest) {
 }
 
 // 配置匹配规则：排除静态资源、图片、API等
+// 性能优化手段
+// “除了 API、静态资源、图片之外，其他的请求（主要是页面 HTML 请求）才来找我”
 export const config = {
     matcher: ['/((?!api|_next/static|_next/image|.*\\.png$).*)'],
 };
+
+// Cookie 就像“会员卡”。当你登录成功时，服务器会给你发一张卡（Set-Cookie），浏览器会把它存起来。
+
+// 以后你每次发请求（无论是刷新页面，还是点链接），浏览器都会自动把这张卡夹在请求头（Request Header）里带给服务器。
+
+// 中间件的作用：就是那个站在门口的保安。他不需要认识你，他只看你手里有没有这张卡（Cookie）。
+
+// 有卡 -> 放行 (NextResponse.next())。
+
+// 没卡 -> 踢出去 (redirect).
+
+
+// 生产环境必须用 jose 或 jsonwebtoken 库在 Middleware 里校验 JWT 的签名，
+// 确保 Cookie 是服务器签发的，而不是用户伪造的。

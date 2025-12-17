@@ -34,7 +34,7 @@ export default function LogoutButton() {
                     variant="ghost"
                     size="sm"
                     // 👇 注意这里加了 !
-                    className="text-gray-700 hover:text-slate-900 hover:!bg-[#cfd0d4]"
+                    className="text-gray-700 hover:text-slate-900 hover:bg-[#cfd0d4]!"
                 >
                     <LogOut size={16} className="mr-2" />
                     退出

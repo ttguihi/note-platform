@@ -62,7 +62,6 @@ export default async function EditNotePage(props: PageProps) {
                 note={note}
                 existingCategories={existingCategories}
             />
-
         </div>
     );
 }

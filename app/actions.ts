@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { verifySession } from "@/lib/session";
 import { redirect } from "next/navigation";
-import OpenAI from "openai"; //
+import OpenAI from "openai";
 const openai = new OpenAI({
     apiKey: process.env.DEEPSEEK_API_KEY,
     baseURL: process.env.DEEPSEEK_BASE_URL,
