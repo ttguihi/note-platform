@@ -26,10 +26,20 @@ export default function MobileNav({ children }: { children: React.ReactNode }) {
             我们在 Sidebar 的外层包一个 div，并添加 onClick 事件。
             利用“事件冒泡”机制，当你点击 Sidebar 里面的任何 Link 时，
             点击事件会向上传递到这里，从而触发 setOpen(false) 关闭抽屉。
-        */}
+                */}
                 <div
                     className="h-full p-4"
-                    onClick={() => setOpen(false)}
+                    onClick={(e) => {
+                        // 核心逻辑优化：
+                        // 1. 获取被点击的元素
+                        const target = e.target as HTMLElement;
+
+                        // 2. 检查点击的是否是链接 (a 标签) 或者 链接内部的元素 (比如图标)
+                        // closest('a') 会向上查找最近的 a 标签
+                        if (target.closest('a')) {
+                            setOpen(false);
+                        }
+                    }}
                 >
                     {children}
                 </div>
