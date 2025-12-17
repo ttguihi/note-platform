@@ -38,6 +38,8 @@ interface CreateNoteFormProps {
 // --- LocalStorage 工具函数 ---
 const CREATE_DRAFT_KEY = "create-note-draft";
 
+//“我设计了一个双重保险机制。除了云端保存，我利用 LocalStorage 实现了毫秒级的本地草稿。
+// 即使用户断网或者误关网页，下次进来也能检测到未保存的草稿并提示恢复。这极大提升了输入的安全性。”
 const saveLocalDraft = (data: z.infer<typeof formSchema>) => {
     try {
         if (typeof window !== 'undefined') {
@@ -53,6 +55,7 @@ const getLocalDraft = (): z.infer<typeof formSchema> | null => {
         if (typeof window === 'undefined') return null;
         const draft = localStorage.getItem(CREATE_DRAFT_KEY);
         return draft ? formSchema.parse(JSON.parse(draft)) : null;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (e) {
         return null;
     }
@@ -129,7 +132,8 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
         if (textarea.tagName !== "TEXTAREA") return;
 
         e.preventDefault();
-
+        // 你实现了类似 GitHub/Notion 的体验：粘贴图片 -> 立即显示 ![上传中...] -> 上传成功后自动替换为 ![image](url)。
+        // 这涉及到了对光标位置 (selectionStart) 和字符串的操作，比简单的表单提交难得多。
         const startPos = textarea.selectionStart || 0;
         const endPos = textarea.selectionEnd || 0;
 
@@ -201,6 +205,8 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
     };
 
     // --- 自动保存草稿 ---
+    // “为了减轻服务器压力，我使用了防抖策略。
+    // 用户输入时只写本地，停止输入 1-2 秒后才会触发云端同步。这样既保证了体验，又节省了数据库 I/O。”
     const debouncedLocalSave = useDebouncedCallback((values: z.infer<typeof formSchema>) => {
         saveLocalDraft(values);
     }, 500);
@@ -235,6 +241,7 @@ export default function CreateNoteForm({ existingCategories }: CreateNoteFormPro
 
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
         } catch (error) {
             toast.error("创建失败", { description: "请检查网络或稍后重试" });
         }
