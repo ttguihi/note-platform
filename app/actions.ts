@@ -117,52 +117,52 @@ export async function deleteNote(noteId: string) {
     revalidatePath("/");
 }
 
-export async function generateNoteSummary(noteId: string) {
-    const session = await verifySession();
-    if (!session?.userId) return { success: false, message: "未登录" };
+// export async function generateNoteSummary(noteId: string) {
+//     const session = await verifySession();
+//     if (!session?.userId) return { success: false, message: "未登录" };
 
-    try {
-        // 1. 先查出笔记内容
-        const note = await prisma.note.findUnique({
-            where: { id: noteId, userId: session.userId },
-        });
+//     try {
+//         // 1. 先查出笔记内容
+//         const note = await prisma.note.findUnique({
+//             where: { id: noteId, userId: session.userId },
+//         });
 
-        if (!note || !note.content) {
-            return { success: false, message: "笔记不存在或内容为空" };
-        }
+//         if (!note || !note.content) {
+//             return { success: false, message: "笔记不存在或内容为空" };
+//         }
 
-        // 2. 调用 AI
-        const completion = await openai.chat.completions.create({
-            // temperature: 0.3：设置得很好。摘要生成需要准确概括，不需要 AI 发散思维乱编故事，0.3 是个很稳的数值。
+//         // 2. 调用 AI
+//         const completion = await openai.chat.completions.create({
+//             // temperature: 0.3：设置得很好。摘要生成需要准确概括，不需要 AI 发散思维乱编故事，0.3 是个很稳的数值。
 
-            // role: "system"：指定了“知识管理助手”的人设，这能让 AI 输出的摘要更专业
-            messages: [
-                {
-                    role: "system",
-                    content: "你是一个专业的知识管理助手。请为用户的笔记生成一个精简的摘要（200字以内），提取核心观点和关键信息。直接输出摘要内容，不要废话。",
-                },
-                {
-                    role: "user",
-                    content: note.content,
-                },
-            ],
-            model: "deepseek-chat", // 或者 deepseek-v3
-            temperature: 0.3, // 低一点比较严谨
-        });
+//             // role: "system"：指定了“知识管理助手”的人设，这能让 AI 输出的摘要更专业
+//             messages: [
+//                 {
+//                     role: "system",
+//                     content: "你是一个专业的知识管理助手。请为用户的笔记生成一个精简的摘要（200字以内），提取核心观点和关键信息。直接输出摘要内容，不要废话。",
+//                 },
+//                 {
+//                     role: "user",
+//                     content: note.content,
+//                 },
+//             ],
+//             model: "deepseek-chat", // 或者 deepseek-v3
+//             temperature: 0.3, // 低一点比较严谨
+//         });
 
-        const summary = completion.choices[0].message.content;
+//         const summary = completion.choices[0].message.content;
 
-        // 3. 将摘要存回数据库
-        if (summary) {
-            await prisma.note.update({
-                where: { id: noteId },
-                data: { summary },
-            });
-        }
+//         // 3. 将摘要存回数据库
+//         if (summary) {
+//             await prisma.note.update({
+//                 where: { id: noteId },
+//                 data: { summary },
+//             });
+//         }
 
-        return { success: true, summary };
-    } catch (error) {
-        console.error("AI Generation Failed:", error);
-        return { success: false, message: "AI 服务暂时不可用" };
-    }
-}
+//         return { success: true, summary };
+//     } catch (error) {
+//         console.error("AI Generation Failed:", error);
+//         return { success: false, message: "AI 服务暂时不可用" };
+//     }
+// }
