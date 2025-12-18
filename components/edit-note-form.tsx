@@ -15,8 +15,8 @@ import CategoryInput from "@/components/category-input";
 import { Input } from "@/components/ui/input";
 import { Loader2, Cloud, ImagePlus, WifiOff, History } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
-import { initDB } from "@/lib/indexeddb"; // 👈 P1
-import { SyncManager } from "@/lib/sync-manager"; // 👈 P1
+import { initDB } from "@/lib/indexeddb";
+import { SyncManager } from "@/lib/sync-manager";
 import {
     Form,
     FormControl,
@@ -25,6 +25,18 @@ import {
     FormLabel,
     FormMessage,
 } from "@/components/ui/form";
+
+// 🌍 协同相关
+import {
+    RoomProvider,
+    useBroadcastEvent,
+    useEventListener,
+    useUpdateMyPresence,
+    useStatus // 👈 现在这里不会报错了
+} from "@/liveblocks.config";
+import { ClientSideSuspense } from "@liveblocks/react";
+import CollaborativeAvatars from "@/components/collaborative-avatars";
+import { LiveCursors } from "@/components/cursor/live-cursors";
 
 const formSchema = z.object({
     title: z.string().min(1, { message: "请输入笔记标题" }),
@@ -40,28 +52,34 @@ interface EditNoteFormProps {
         content: string;
         category: string | null;
         tags: { name: string }[];
-        updatedAt: Date; // 增加时间戳用于对比
+        updatedAt: Date;
     };
     existingCategories: string[];
 }
 
-// LocalStorage 辅助函数
 const getDraftKey = (noteId: string) => `note-draft-${noteId}`;
-const clearLocalDraft = (noteId: string) => {
-    try { if (typeof window !== 'undefined') localStorage.removeItem(getDraftKey(noteId)); } catch (e) { }
-};
+const clearLocalDraft = (noteId: string) => { try { if (typeof window !== 'undefined') localStorage.removeItem(getDraftKey(noteId)); } catch (e) { } };
 
-export default function EditNoteForm({ note, existingCategories }: EditNoteFormProps) {
+// -----------------------------------------------------------------------------
+// 内部逻辑组件
+// -----------------------------------------------------------------------------
+function EditNoteFormInner({ note, existingCategories }: EditNoteFormProps) {
     const router = useRouter();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const containerRef = useRef<HTMLFormElement>(null);
 
     const [isSuccess, setIsSuccess] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-
-    // 保存状态：saved(已同步), saving(保存中), error(失败), offline-saved(已存本地)
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | "offline-saved">("saved");
     const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
     const [isMounted, setIsMounted] = useState(false);
+
+    // 🔒 广播死循环锁
+    const isRemoteUpdate = useRef(false);
+
+    // 🌍 监听连接状态 (用于无缝切换)
+    const status = useStatus();
+    const prevStatus = useRef(status);
 
     const formMethods = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -76,47 +94,86 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
     const { watch, control, handleSubmit, formState, setValue, getValues, reset } = formMethods;
     const { isSubmitting } = formState;
 
-    // --- 🟢 初始化检查：对比 Server 数据与 IDB 本地数据 ---
+    // --- 🌍 0. 核心逻辑：处理“本地 <-> 协作”切换的瞬间 ---
+    useEffect(() => {
+        const isReconnected = prevStatus.current !== "connected" && status === "connected";
+
+        if (isReconnected) {
+            console.log("🔄 网络/协作服务已恢复，正在对齐状态...");
+            SyncManager.sync().then(() => {
+                // router.refresh(); 
+            });
+        }
+        prevStatus.current = status;
+    }, [status, router]);
+
+    // --- 🌍 1. 协同：光标追踪逻辑 ---
+    const updateMyPresence = useUpdateMyPresence();
+
+    const handlePointerMove = (e: React.PointerEvent<HTMLFormElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        updateMyPresence({ cursor: { x, y } });
+    };
+
+    const handlePointerLeave = () => {
+        updateMyPresence({ cursor: null });
+    };
+
+    // --- 🌍 2. 协同：接收全字段广播 ---
+    const broadcast = useBroadcastEvent();
+
+    useEventListener(({ event }) => {
+        if (event.type === "UPDATE_FIELD") {
+            const { field, value } = event;
+            const currentValue = getValues(field);
+
+            // 深度比较
+            const isDifferent = JSON.stringify(currentValue) !== JSON.stringify(value);
+
+            if (isDifferent) {
+                isRemoteUpdate.current = true; // 上锁
+
+                console.log(`收到协同更新: ${field}`);
+                setValue(field, value, { shouldDirty: true });
+
+                setTimeout(() => { isRemoteUpdate.current = false; }, 0); // 解锁
+            }
+        }
+    });
+
+    // --- 初始化检查 ---
     useEffect(() => {
         setIsMounted(true);
         setLastSavedTime(new Date());
 
         const checkVersions = async () => {
             try {
-                // 1. 检查 IndexedDB (P1 核心: 离线编辑优先)
                 const db = await initDB();
                 const localNote = await db.get('notes', note.id);
-
-                // 如果本地有数据，且更新时间晚于服务器数据
                 if (localNote && new Date(localNote.updatedAt).getTime() > new Date(note.updatedAt).getTime()) {
-                    console.log("Found newer local version in IDB");
                     reset({
                         title: localNote.title,
                         category: localNote.category || "",
                         tags: localNote.tags ? localNote.tags.map((t: any) => t.name) : [],
                         content: localNote.content
                     });
-                    toast.info("已加载本地未同步的最新版本", { icon: <History className="w-4 h-4" /> });
+                    toast.info("已加载本地最新版本", { icon: <History className="w-4 h-4" /> });
                     return;
                 }
-
-                // 2. 检查 LocalStorage (崩溃恢复)
                 const draftStr = localStorage.getItem(getDraftKey(note.id));
                 if (draftStr) {
-                    const draft = JSON.parse(draftStr);
-                    reset(draft);
-                    toast.warning("已恢复上次未保存的草稿");
+                    reset(JSON.parse(draftStr));
+                    toast.warning("已恢复草稿");
                 }
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error(e); }
         };
-
         checkVersions();
     }, [note, reset]);
 
-    // --- 📸 图片上传逻辑 (复用) ---
-    const handlePaste = async (e: React.ClipboardEvent) => { /*...同Create...*/
+    // --- 上传逻辑 ---
+    const handlePaste = async (e: React.ClipboardEvent) => {
         const items = e.clipboardData.items;
         let file: File | null = null;
         for (const item of items) { if (item.type.startsWith("image")) { file = item.getAsFile(); break; } }
@@ -127,7 +184,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
         await uploadImage(file, textarea.selectionStart || 0, textarea.selectionEnd || 0);
     };
 
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => { /*...同Create...*/
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const currentContent = getValues("content") || "";
@@ -150,48 +207,34 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
 
             const newContent = getValues("content").replace(placeholder, `${prefix}![image](${data.url})`);
             setValue("content", newContent, { shouldDirty: true });
+
+            // 🌍 图片也要广播
+            broadcast({ type: "UPDATE_FIELD", field: "content", value: newContent });
+
             toast.dismiss(loadingToast);
         } catch (error) {
             toast.error("上传失败");
             setValue("content", getValues("content").replace(/!\[上传中\.\.\.\]\(\.\.\.\)/g, ""));
-        } finally {
-            setIsUploading(false);
-        }
+        } finally { setIsUploading(false); }
     };
 
-    // --- 🔥 P1 核心修改：自动保存逻辑 ---
+    // --- 自动保存 ---
     const debouncedAutoSave = useDebouncedCallback(async (values: z.infer<typeof formSchema>) => {
         if (isSubmitting || isSuccess || isUploading) return;
         setSaveStatus("saving");
 
         try {
-            // 1. 始终写入 IndexedDB (乐观更新，确保本地Read Path也是新的)
             const db = await initDB();
-            const noteData = {
-                id: note.id,
-                ...values,
-                tags: values.tags.map(t => ({ name: t })), // 格式化为对象存入
-                updatedAt: new Date(),
-                createdAt: note.updatedAt // 保持原创建时间或从note获取
-            };
+            const noteData = { id: note.id, ...values, tags: values.tags.map(t => ({ name: t })), updatedAt: new Date(), createdAt: note.updatedAt };
             await db.put('notes', noteData);
-
-            // 备份到 LocalStorage (双重保险)
             localStorage.setItem(getDraftKey(note.id), JSON.stringify(values));
 
-            // 2. 网络判断
             if (!navigator.onLine) {
-                // 离线：加入队列
-                await SyncManager.enqueue({
-                    type: 'UPDATE',
-                    noteId: note.id,
-                    data: values
-                });
+                await SyncManager.enqueue({ type: 'UPDATE', noteId: note.id, data: values });
                 setSaveStatus("offline-saved");
                 return;
             }
 
-            // 在线：直接尝试同步 (更稳健)
             const formData = new FormData();
             formData.append("id", note.id);
             formData.append("title", values.title);
@@ -203,13 +246,9 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
             if (result?.success) {
                 setSaveStatus("saved");
                 setLastSavedTime(new Date());
-                clearLocalDraft(note.id); // 只有云端成功才清草稿
-            } else {
-                setSaveStatus("error");
-            }
+                clearLocalDraft(note.id);
+            } else { setSaveStatus("error"); }
         } catch (error) {
-            console.error("Auto save error", error);
-            // 如果出错（例如网络突然断了），回退到离线状态
             setSaveStatus("offline-saved");
             await SyncManager.enqueue({ type: 'UPDATE', noteId: note.id, data: values });
         }
@@ -219,50 +258,83 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
     const onManualSubmit = useCallback(async (values: z.infer<typeof formSchema>) => {
         if (isSuccess) return;
         debouncedAutoSave.cancel();
-
-        // 复用自动保存逻辑，但强制触发一次
         await debouncedAutoSave(values);
+        toast.success("已保存", { description: navigator.onLine ? "云端同步完成" : "已存入本地" });
+        router.refresh();
+    }, [isSuccess, debouncedAutoSave, router]);
 
-        const isOnline = navigator.onLine;
-        toast.success("已保存", {
-            description: isOnline ? "云端同步完成" : "已存入本地，连网后自动同步",
-            icon: isOnline ? <Cloud className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />
-        });
-
-        // 可选：跳转回详情页
-        // router.push(`/notes/${note.id}`); 
-    }, [isSuccess, debouncedAutoSave]);
-
-    // 快捷键监听
     useEffect(() => {
-        const down = (e: KeyboardEvent) => {
-            if (e.key === "s" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSubmit(onManualSubmit)(); }
-        };
+        const down = (e: KeyboardEvent) => { if (e.key === "s" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSubmit(onManualSubmit)(); } };
         document.addEventListener("keydown", down);
         return () => document.removeEventListener("keydown", down);
     }, [handleSubmit, onManualSubmit]);
 
-    // 监听表单变化触发自动保存
+    // --- 🌍 3. 协同：全字段广播 ---
     useEffect(() => {
-        const subscription = watch((value) => { if (value) debouncedAutoSave(value as any); });
+        const subscription = watch((value, { name }) => {
+            if (isRemoteUpdate.current) return; // 锁
+
+            if (value && name) {
+                debouncedAutoSave(value as any);
+
+                const fieldValue = value[name as keyof typeof value];
+                broadcast({
+                    type: "UPDATE_FIELD",
+                    field: name as any,
+                    value: fieldValue
+                });
+            }
+        });
         return () => subscription.unsubscribe();
-    }, [watch, debouncedAutoSave]);
+    }, [watch, debouncedAutoSave, broadcast]);
 
     const isButtonDisabled = isSubmitting || isSuccess || isUploading;
 
     return (
         <Form {...formMethods}>
-            <form onSubmit={handleSubmit(onManualSubmit)} className="space-y-6 relative">
-                {/* 顶部状态栏 */}
-                <div className="absolute -top-12 right-0 flex items-center gap-2 text-sm text-gray-500 transition-all duration-500">
-                    {saveStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /><span>正在保存...</span></>}
-                    {saveStatus === "saved" && <><Cloud className="h-3 w-3" /><span>云端已同步 {isMounted && lastSavedTime?.toLocaleTimeString()}</span></>}
-                    {saveStatus === "offline-saved" && (
-                        <span className="text-amber-600 flex items-center bg-amber-50 px-2 py-1 rounded-md border border-amber-200">
-                            <WifiOff className="h-3 w-3 mr-1" /> 离线模式：已存本地
-                        </span>
-                    )}
-                    {saveStatus === "error" && <span className="text-red-500">保存失败</span>}
+            <form
+                onSubmit={handleSubmit(onManualSubmit)}
+                className="space-y-6 relative pt-4"
+                ref={containerRef}
+                onPointerMove={handlePointerMove}
+                onPointerLeave={handlePointerLeave}
+            >
+                {/* 🌍 渲染其他人的光标 */}
+                <LiveCursors />
+
+                {/* --- 顶部工具栏 --- */}
+                <div className="absolute -top-10 left-0 right-0 flex justify-between items-center h-10">
+
+                    {/* 左侧：双状态显示 */}
+                    <div className="flex items-center gap-4">
+                        {/* 1. 保存状态 */}
+                        <div className="flex items-center gap-2 text-sm text-gray-500 transition-all duration-500">
+                            {saveStatus === "saving" && <><Loader2 className="h-3 w-3 animate-spin" /><span>正在保存</span></>}
+                            {saveStatus === "saved" && <><Cloud className="h-3 w-3" /><span>已同步</span></>}
+                            {saveStatus === "offline-saved" && (
+                                <span className="text-amber-600 flex items-center bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 text-xs">
+                                    <WifiOff className="h-3 w-3 mr-1" /> 离线保存
+                                </span>
+                            )}
+                            {saveStatus === "error" && <span className="text-red-500">保存失败</span>}
+                        </div>
+
+                        {/* 2. 协作状态指示器 */}
+                        <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gray-50 border border-gray-100 text-xs text-gray-600">
+                            <div className={`w-2 h-2 rounded-full ${status === "connected" ? "bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.5)]" :
+                                status === "reconnecting" ? "bg-yellow-500 animate-pulse" : "bg-gray-300"
+                                }`} />
+                            <span className="font-medium">
+                                {status === "connected" ? "实时协作中" :
+                                    status === "reconnecting" ? "正在连接..." : "本地模式"}
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* 右侧：协作者头像 */}
+                    <div>
+                        <CollaborativeAvatars />
+                    </div>
                 </div>
 
                 <FormField
@@ -327,6 +399,7 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                     )}
                 />
 
+                {/* ✅ 修复了这里的语法错误 */}
                 <div className="flex justify-end gap-4">
                     <Link href={`/notes/${note.id}`}><Button variant="outline" type="button">取消</Button></Link>
                     <Button type="submit" disabled={isButtonDisabled} className="min-w-[100px]">
@@ -335,5 +408,30 @@ export default function EditNoteForm({ note, existingCategories }: EditNoteFormP
                 </div>
             </form>
         </Form>
+    );
+}
+
+// -----------------------------------------------------------------------------
+// 外部 Wrapper
+// -----------------------------------------------------------------------------
+export default function EditNoteFormWrapper(props: EditNoteFormProps) {
+    return (
+        <RoomProvider
+            id={`note-${props.note.id}`}
+            initialPresence={{ isTyping: false, cursor: null }}
+            initialStorage={{
+                title: props.note.title,
+                content: props.note.content,
+            }}
+        >
+            <ClientSideSuspense fallback={
+                <div className="h-[500px] flex flex-col items-center justify-center text-muted-foreground gap-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                    <p>正在连接实时协作服务...</p>
+                </div>
+            }>
+                {() => <EditNoteFormInner {...props} />}
+            </ClientSideSuspense>
+        </RoomProvider>
     );
 }
