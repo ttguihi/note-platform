@@ -48,7 +48,16 @@ export default function RootLayout({
         >
           {/* <ThemeColorProvider> */}
           {/* ✅ 你的进度条动画在这里，完全保留 */}
-          <NextTopLoader color="#6366f1" showSpinner={false} />
+          <NextTopLoader
+            // color="#6366f1"
+            showSpinner={false}
+            color="var(--primary)"
+
+            /* 建议：手动指定阴影，因为默认阴影算法可能无法解析 var(...) */
+            shadow="0 0 10px var(--primary), 0 0 5px var(--primary)"
+
+          // showSpinner={false}
+          />
 
           {children}
 
