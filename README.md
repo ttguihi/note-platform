@@ -56,6 +56,10 @@
   - **自动生成**：集成 AI 大模型能力，根据笔记正文深度分析并自动生成精准摘要。
   - **效率提升**：帮助用户在列表页快速预览核心内容，无需点开详情即可掌握要点。
 
+- **🌊 AI 流式极速响应 (Streaming)**
+  - **打字机视觉反馈**：摒弃传统的“转圈等待”，采用 Server-Sent Events (SSE) 技术实现流式输出。AI 生成摘要的过程如同打字机般逐字呈现，让用户实时感知 AI 的思考脉络，大幅降低心理等待时间。
+  - **Vercel AI SDK 集成**：深度整合 Vercel AI SDK Core，通过标准 API Route 实现高效的流式数据传输，确保在弱网环境下也能保持稳定的输出体验。
+
 ### ☁️ 真实云部署
 
 - 前后端完整部署于 **Vercel**，数据托管于云数据库，随时随地可访问。
@@ -67,6 +71,7 @@
 - **数据库 ORM**: Prisma
 - **样式**: Tailwind CSS
 - **UI 组件库**: Shadcn/ui
+- **AI SDK**: Vercel AI SDK (OpenAI Compatible)
 - **文件存储**: Vercel Blob
 - **表单管理**: React Hook Form + Zod
 - **通知**: Sonner (Toast)
@@ -94,6 +99,10 @@ DATABASE_URL="file:./dev.db"
 # Vercel Blob 存储 (用于图片上传)
 # 请在 Vercel 控制台 -> Storage -> Blob 获取 Token
 BLOB_READ_WRITE_TOKEN="vercel_blob_rw_xxxxxxxxxxxxx"
+
+# AI 配置 (DeepSeek / OpenAI)
+DEEPSEEK_API_KEY="sk-xxxxxxxxxxxxxxxx"
+DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"
 
 # 鉴权相关 (如果使用了 Auth)
 # SESSION_SECRET="..."
